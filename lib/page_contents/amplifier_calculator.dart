@@ -37,7 +37,7 @@ class AmplifierCalculator {
   });
 
   // =================== NaN / Inf Protection ===================
-  // 只做保护，不改任何原公式与数据流；遇到奇点就输出 NaN，让 UI 显示 Error 而不是崩溃。
+  // 只做保护，不改任何原公式与数据流；遇到奇点就输出 NaN/Inf，让 UI 显示 Error 而不是崩溃。
   static const double _eps = 1e-12;
 
   bool _isBad(double x) => x.isNaN || x.isInfinite;
@@ -77,15 +77,26 @@ class AmplifierCalculator {
     return out;
   }
 
-  // 安全实数除法
+  // 安全实数除法（ +/-∞ 判断）
   double _safeDivD(double num, double den) {
-    if (den.abs() < _eps) return double.nan;
+    if (num.isNaN || den.isNaN) return double.nan;
+
+    // 分母过小：按数学极限给出 +/-∞ 或 NaN(0/0)
+    if (den.abs() < _eps) {
+      if (num == 0.0) return double.nan; // 0/0 -> NaN
+      // 保留符号：sign(num) * sign(den)
+      final sNum = num.isNegative ? -1.0 : 1.0;
+      final sDen = (den == 0.0) ? 1.0 : (den.isNegative ? -1.0 : 1.0);
+      final sign = sNum * sDen;
+      return sign < 0 ? double.negativeInfinity : double.infinity;
+    }
+
     final out = num / den;
-    if (_isBad(out)) return double.nan;
+    if (out.isNaN) return double.nan;
+    // out 允许为 +/-∞，不拦截（用户要求判断正负无穷）
     return out;
   }
 
-  // 辅助函数：渲染可滚动的 LaTeX 公式
   Widget _texScroll(String latex) {
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
@@ -97,7 +108,6 @@ class AmplifierCalculator {
     );
   }
 
-  // 辅助函数：渲染普通文本
   Widget _text(String text, {bool bold = false}) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
@@ -119,8 +129,11 @@ class AmplifierCalculator {
   // 辅助函数：生成标准化的结果行 (数值 + dB)
   String formatResultLine(String label, double val) {
     String dbPart;
-    if (val.isNaN || val.isInfinite) {
+    if (val.isNaN) {
       dbPart = r'\text{Error}';
+    } else if (val.isInfinite) {
+      // 无穷时不输出 dB，避免误导
+      dbPart = r'\text{∞ (singularity)}';
     } else if (val <= 0) {
       dbPart = r'\text{Unstable } (<0)';
     } else {
@@ -133,6 +146,72 @@ class AmplifierCalculator {
         r' \quad \left( ' +
         dbPart +
         r' \right)';
+  }
+
+  String _v(double x) => _texNumSafe(x);
+
+  String _latexSubstitutionK({
+    required double s11Abs,
+    required double s22Abs,
+    required double deltaAbs,
+    required double s12Abs,
+    required double s21Abs,
+  }) {
+    return r'K=\frac{1-|S_{11}|^2-|S_{22}|^2+|\Delta|^2}{2|S_{12}S_{21}|}'
+    r'=\frac{1-(' +
+        _v(s11Abs) +
+        r')^2-(' +
+        _v(s22Abs) +
+        r')^2+(' +
+        _v(deltaAbs) +
+        r')^2}{2\cdot(' +
+        _v(s12Abs) +
+        r')\cdot(' +
+        _v(s21Abs) +
+        r')}';
+  }
+
+  String _latexSubstitutionKt({
+    required double s11Abs,
+    required double s22Abs,
+    required double deltaAbs,
+    required double s12Abs,
+    required double s21Abs,
+  }) {
+    return r'K_t=\frac{3-2|S_{11}|^2-2|S_{22}|^2+|\Delta|^2-\left|1-|\Delta|^2\right|}{4|S_{12}S_{21}|}'
+    r'=\frac{3-2(' +
+        _v(s11Abs) +
+        r')^2-2(' +
+        _v(s22Abs) +
+        r')^2+(' +
+        _v(deltaAbs) +
+        r')^2-\left|1-(' +
+        _v(deltaAbs) +
+        r')^2\right|}{4\cdot(' +
+        _v(s12Abs) +
+        r')\cdot(' +
+        _v(s21Abs) +
+        r')}';
+  }
+
+  String _latexSubstitutionMu({
+    required String symbol, // r'\mu' 或 r"\mu'"
+    required double sPortAbs, // |S11| 或 |S22|
+    required double termAbs, // |S22 - ΔS11*| 或 |S11 - ΔS22*|
+    required double s12Abs,
+    required double s21Abs,
+  }) {
+    return symbol +
+        r'=\frac{1-|S|^2}{|T|+|S_{12}S_{21}|}'
+        r'=\frac{1-(' +
+        _v(sPortAbs) +
+        r')^2}{(' +
+        _v(termAbs) +
+        r')+(' +
+        _v(s12Abs) +
+        r')\cdot(' +
+        _v(s21Abs) +
+        r')}';
   }
 
   // 核心方法：构建计算步骤面板
@@ -278,7 +357,7 @@ class AmplifierCalculator {
     );
 
     // =========================================================
-    // Step 4: Power Gains (Gt, Gp, Ga) - 教学模式
+    // Step 4: Power Gains (Gt, Gp, Ga)
     // =========================================================
     final double gsMagSq = pow(gammaS.modulus, 2).toDouble();
     final double glMagSq = pow(gammaL.modulus, 2).toDouble();
@@ -337,7 +416,6 @@ class AmplifierCalculator {
             ),
           ),
           const SizedBox(height: 12),
-
           _text('1. Transducer Power Gain (Gt)', bold: true),
           _texScroll(
               r'G_t = \underbrace{\frac{1 - |\Gamma_S|^2}{|1 - \Gamma_{in}\Gamma_S|^2}}_{\text{Input}} \cdot \underbrace{|S_{21}|^2}_{\text{Device}} \cdot \underbrace{\frac{1 - |\Gamma_L|^2}{|1 - S_{22}\Gamma_L|^2}}_{\text{Output}}'),
@@ -363,7 +441,6 @@ class AmplifierCalculator {
           _text('Result:', bold: true),
           _texScroll(formatResultLine('G_t', gt)),
           const Divider(),
-
           _text('2. Operating Power Gain (Gp)', bold: true),
           _texScroll(
               r'G_p = \frac{1}{1 - |\Gamma_{in}|^2} \cdot |S_{21}|^2 \cdot \frac{1 - |\Gamma_L|^2}{|1 - S_{22}\Gamma_L|^2}'),
@@ -378,7 +455,6 @@ class AmplifierCalculator {
           _text('Result:', bold: true),
           _texScroll(formatResultLine('G_p', gp)),
           const Divider(),
-
           _text('3. Available Power Gain (Ga)', bold: true),
           _texScroll(
               r'G_a = \frac{1 - |\Gamma_S|^2}{|1 - S_{11}\Gamma_S|^2} \cdot |S_{21}|^2 \cdot \frac{1}{1 - |\Gamma_{out}|^2}'),
@@ -397,19 +473,58 @@ class AmplifierCalculator {
     );
 
     // =========================================================
-    // Step 5: Stability Analysis (K, Delta, Mu, Mu') - Ultimate Version
+    // Step 5: Stability Analysis (K, Δ, Kt, μ, μ')
     // =========================================================
     const double epsilon = 1e-9;
     final bool isUnilateral = (s12.modulus < epsilon) || (s21.modulus < epsilon);
 
+    // ---- 共同计算（无论是否 unilateral 都计算，允许出现 +/-∞）----
+    final double s11Abs = s11.modulus;
+    final double s22Abs = s22.modulus;
+    final double s12Abs = s12.modulus;
+    final double s21Abs = s21.modulus;
+
+    final double s11MagSq2 = s11Abs * s11Abs;
+    final double s22MagSq2 = s22Abs * s22Abs;
+    final double deltaAbs = delta.modulus;
+    final double deltaMagSq2 = deltaAbs * deltaAbs;
+
+    final double denomK = 2.0 * s12Abs * s21Abs;
+    final double numeratorK = 1.0 - s11MagSq2 - s22MagSq2 + deltaMagSq2;
+    final double k = _safeDivD(numeratorK, denomK);
+
+    final double denomKt = 4.0 * s12Abs * s21Abs;
+    final double numeratorKt = 3.0 -
+        2.0 * s11MagSq2 -
+        2.0 * s22MagSq2 +
+        deltaMagSq2 -
+        (1.0 - deltaMagSq2).abs();
+    final double kt = _safeDivD(numeratorKt, denomKt);
+
+    final double muNumerator = 1.0 - s11MagSq2;
+    final Complex term1MuComplex = s22 - delta * s11.conjugate();
+    final double term1Mu = term1MuComplex.modulus;
+    final double term2_stability = s12Abs * s21Abs;
+    final double mu = _safeDivD(muNumerator, (term1Mu + term2_stability));
+
+    final double muPrimeNumerator = 1.0 - s22MagSq2;
+    final Complex term1MuPrimeComplex = s11 - delta * s22.conjugate();
+    final double term1MuPrime = term1MuPrimeComplex.modulus;
+    final double muPrime = _safeDivD(muPrimeNumerator, (term1MuPrime + term2_stability));
+
+    // 条件（允许 k/kt 为 +/-∞）
+    final bool stableByK = (k > 1.0) && (deltaAbs < 1.0);
+    final bool stableByKt = (kt > 1.0);
+    final bool stableByMu = (mu > 1.0) && (muPrime > 1.0);
+
     if (isUnilateral) {
-      final double s11Mag = s11.modulus;
-      final double s22Mag = s22.modulus;
-      final bool isStableUni = (s11Mag < 1.0) && (s22Mag < 1.0);
+      // unilateral 情况下：最终判据仍以 |S11|<1 && |S22|<1 为主，
+      // 但 K/Kt/mu/mu' 仍继续计算并显示（可能为 +/-∞）。
+      final bool isStableUni = (s11Abs < 1.0) && (s22Abs < 1.0);
 
       panels.add(
         StepPanel(
-          title: '5. Stability Analysis (Unilateral Case)',
+          title: '5. Stability Analysis (Unilateral Case + K/Kt/μ Reference)',
           content: [
             Container(
               padding: const EdgeInsets.all(8),
@@ -420,7 +535,8 @@ class AmplifierCalculator {
                   const SizedBox(width: 8),
                   Expanded(
                     child: _text(
-                      r'Unilateral Condition Detected (|S12| ≈ 0 or |S21| ≈ 0). Rollett Factor (K) is undefined.',
+                      r'Unilateral Condition Detected (|S12| ≈ 0 or |S21| ≈ 0). '
+                      r'We will STILL compute K, Kt, μ, μ′. When |S12·S21| → 0, K and Kt may become +∞ or −∞.',
                       bold: true,
                     ),
                   ),
@@ -428,15 +544,13 @@ class AmplifierCalculator {
               ),
             ),
             const SizedBox(height: 12),
-            _text(
-              'Since there is no feedback (S12 = 0), stability is determined solely by checking if input/output ports are passive.',
-            ),
-            _text('Conditions for Unconditional Stability:', bold: true),
+
+            _text('Primary (Unilateral) Stability Check:', bold: true),
             _texScroll(r'|S_{11}| < 1 \quad \text{and} \quad |S_{22}| < 1'),
-            const Divider(),
-            _text('Substitution (Value Replacement):', bold: true),
-            _texScroll(r'|S_{11}| = ' + _texNum(s11Mag)),
-            _texScroll(r'|S_{22}| = ' + _texNum(s22Mag)),
+            _text('Substitution:', bold: true),
+            _texScroll(r'|S_{11}| = ' + _texNum(s11Abs)),
+            _texScroll(r'|S_{22}| = ' + _texNum(s22Abs)),
+
             const SizedBox(height: 12),
             Container(
               padding: const EdgeInsets.all(12),
@@ -461,7 +575,7 @@ class AmplifierCalculator {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          isStableUni ? "Unconditionally Stable" : "Potentially Unstable",
+                          isStableUni ? "Unconditionally Stable (Unilateral Test)" : "Potentially Unstable (Unilateral Test)",
                           style: TextStyle(
                             color: isStableUni ? Colors.green[800] : Colors.deepOrange[900],
                             fontWeight: FontWeight.bold,
@@ -484,83 +598,309 @@ class AmplifierCalculator {
                 ],
               ),
             ),
+
+            const Divider(),
+
+            _text('Reference Computations (still computed):', bold: true),
+
+            // Δ
+            _text('0) Determinant (Δ)', bold: true),
+            _texScroll(r'\Delta = S_{11} S_{22} - S_{12} S_{21}'),
+            _texScroll(r'\Delta = ' + _latexComplexSafe(delta, displayFormat)),
+            _texScroll(r'|\Delta| = ' + _texNum(deltaAbs)),
+            const Divider(),
+
+            // K
+            _text('1) Rollett Factor (K)', bold: true),
+            _texScroll(r'K=\frac{1-|S_{11}|^2-|S_{22}|^2+|\Delta|^2}{2|S_{12}S_{21}|}'),
+            _text('Substitution (only replace values, do not simplify):', bold: true),
+            _texScroll(
+              _latexSubstitutionK(
+                s11Abs: s11Abs,
+                s22Abs: s22Abs,
+                deltaAbs: deltaAbs,
+                s12Abs: s12Abs,
+                s21Abs: s21Abs,
+              ),
+            ),
+            _text('Computed Result:', bold: true),
+            _texScroll(r'K=\mathbf{' + _texNum(k) + r'}'),
+            if (k.isInfinite)
+              _text(
+                k.isNegative
+                    ? '⚠ K = −∞ (denominator → 0 and numerator < 0)'
+                    : '⚠ K = +∞ (denominator → 0 and numerator > 0)',
+                bold: true,
+              ),
+            _text(
+              stableByK ? '✓ (A) satisfied (numerically): K > 1 and |Δ| < 1' : '✗ (A) not satisfied (numerically)',
+              bold: true,
+            ),
+            const Divider(),
+
+            // Kt
+            _text('2) Single-Parameter Stability Criterion (Kt)', bold: true),
+            _texScroll(
+                r'K_t=\frac{3-2|S_{11}|^2-2|S_{22}|^2+|\Delta|^2-\left|1-|\Delta|^2\right|}{4|S_{12}S_{21}|}'),
+            _text('Substitution (only replace values, do not simplify):', bold: true),
+            _texScroll(
+              _latexSubstitutionKt(
+                s11Abs: s11Abs,
+                s22Abs: s22Abs,
+                deltaAbs: deltaAbs,
+                s12Abs: s12Abs,
+                s21Abs: s21Abs,
+              ),
+            ),
+            _text('Computed Result:', bold: true),
+            _texScroll(r'K_t=\mathbf{' + _texNum(kt) + r'}'),
+            if (kt.isInfinite)
+              _text(
+                kt.isNegative
+                    ? '⚠ Kt = −∞ (denominator → 0 and numerator < 0)'
+                    : '⚠ Kt = +∞ (denominator → 0 and numerator > 0)',
+                bold: true,
+              ),
+            _text(
+              stableByKt ? '✓ (B) satisfied (numerically): Kt > 1' : '✗ (B) not satisfied (numerically)',
+              bold: true,
+            ),
+            const Divider(),
+
+            // μ
+            _text('3) Geometric Stability Factor (μ)', bold: true),
+            _texScroll(r'\mu=\frac{1-|S_{11}|^2}{|S_{22}-\Delta S_{11}^*|+|S_{12}S_{21}|}'),
+
+            _text('Intermediate term (under current format):', bold: true),
+            _texScroll(
+              r'S_{22}-\Delta S_{11}^* = (' +
+                  _latexComplexSafe(s22, displayFormat) +
+                  r')-(' +
+                  _latexComplexSafe(delta, displayFormat) +
+                  r')(' +
+                  _latexComplexSafe(s11.conjugate(), displayFormat) +
+                  r')',
+            ),
+            _texScroll(
+              r'S_{22}-\Delta S_{11}^*=' +
+                  _latexComplexSafe(term1MuComplex, displayFormat) +
+                  r',\quad |S_{22}-\Delta S_{11}^*|=' +
+                  _texNum(term1Mu),
+            ),
+
+            _text('Substitution (only replace values, do not simplify):', bold: true),
+            _texScroll(
+              _latexSubstitutionMu(
+                symbol: r'\mu',
+                sPortAbs: s11Abs,
+                termAbs: term1Mu,
+                s12Abs: s12Abs,
+                s21Abs: s21Abs,
+              ) +
+                  r'\;=\;' +
+                  _texNum(mu),
+            ),
+
+            _text('Computed Result:', bold: true),
+            _texScroll(r'\mu=\mathbf{' + _texNum(mu) + r'}'),
+            const Divider(),
+
+// μ'
+            _text("4) Geometric Stability Factor (μ')", bold: true),
+            _texScroll(r"\mu'=\frac{1-|S_{22}|^2}{|S_{11}-\Delta S_{22}^*|+|S_{12}S_{21}|}"),
+
+            _text('Intermediate term (under current format):', bold: true),
+            _texScroll(
+              r'S_{11}-\Delta S_{22}^* = (' +
+                  _latexComplexSafe(s11, displayFormat) +
+                  r')-(' +
+                  _latexComplexSafe(delta, displayFormat) +
+                  r')(' +
+                  _latexComplexSafe(s22.conjugate(), displayFormat) +
+                  r')',
+            ),
+            _texScroll(
+              r'S_{11}-\Delta S_{22}^*=' +
+                  _latexComplexSafe(term1MuPrimeComplex, displayFormat) +
+                  r",\quad |S_{11}-\Delta S_{22}^*|=" +
+                  _texNum(term1MuPrime),
+            ),
+
+            _text('Substitution (only replace values, do not simplify):', bold: true),
+            _texScroll(
+              _latexSubstitutionMu(
+                symbol: r"\mu'",
+                sPortAbs: s22Abs,
+                termAbs: term1MuPrime,
+                s12Abs: s12Abs,
+                s21Abs: s21Abs,
+              ) +
+                  r'\;=\;' +
+                  _texNum(muPrime),
+            ),
+
+            _text('Computed Result:', bold: true),
+            _texScroll(r"\mu'=\mathbf{" + _texNum(muPrime) + r"}"),
+
+
+            const SizedBox(height: 8),
+            _text(
+              'Note: In unilateral cases, K/Kt can blow up to ±∞ because the denominator contains |S12·S21|. '
+                  'So the final stability decision here uses the unilateral passivity test.',
+              bold: true,
+            ),
           ],
         ),
       );
     } else {
-      final double s11MagSq = pow(s11.modulus, 2).toDouble();
-      final double s22MagSq = pow(s22.modulus, 2).toDouble();
-      final double deltaMagSq = pow((s11 * s22 - s12 * s21).modulus, 2).toDouble();
-      final double denomK_val = 2.0 * s12.modulus * s21.modulus;
-      final double numeratorK_val = 1.0 - s11MagSq - s22MagSq + deltaMagSq;
-      final double k = _safeDivD(numeratorK_val, denomK_val);
-
-      final double muNumerator = 1.0 - s11MagSq;
-      final term1MuComplex = s22 - (s11 * s22 - s12 * s21) * s11.conjugate();
-      final double term1Mu = term1MuComplex.modulus;
-      final double term2_stability = s12.modulus * s21.modulus;
-      final double mu = _safeDivD(muNumerator, (term1Mu + term2_stability));
-
-      final double muPrimeNumerator = 1.0 - s22MagSq;
-      final term1MuPrimeComplex = s11 - (s11 * s22 - s12 * s21) * s22.conjugate();
-      final double term1MuPrime = term1MuPrimeComplex.modulus;
-      final double muPrime = _safeDivD(muPrimeNumerator, (term1MuPrime + term2_stability));
-
-      final isUnconditionallyStable = (mu > 1);
+      // 双向（非 unilateral）分支
+      final bool isUnconditionallyStable = stableByK || stableByKt || stableByMu;
 
       panels.add(
         StepPanel(
-          title: '5. Stability Analysis (K, Δ, μ)',
+          title: '5. Stability Analysis (K, Δ, Kt, μ, μ\')',
           content: [
             _text('Stability criteria ensure the amplifier does not oscillate.'),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.grey[100],
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.grey.shade300),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _text('Known Values for Stability:', bold: true),
-                  _texScroll(r'|S_{11}|^2 = ' +
-                      _texNum(s11MagSq) +
-                      r', \quad |S_{22}|^2 = ' +
-                      _texNum(s22MagSq)),
-                  _texScroll(r'|\Delta|^2 = ' +
-                      _texNum(deltaMagSq) +
-                      r', \quad 2|S_{12}S_{21}| = ' +
-                      _texNum(denomK_val)),
-                  _texScroll(r'|S_{22} - \Delta S_{11}^*| = ' +
-                      _texNum(term1Mu) +
-                      r', \quad |S_{12}S_{21}| = ' +
-                      _texNum(term2_stability)),
-                ],
+
+            _text('Unconditional Stability Conditions (Sufficient tests):', bold: true),
+            _texScroll(r'\text{(A)}\;\;K>1 \ \text{and}\ |\Delta|<1'),
+            _texScroll(r'\text{(B)}\;\;K_t>1'),
+            _texScroll(r"\text{(C)}\;\;\mu>1 \ \text{and}\ \mu'>1"),
+            const SizedBox(height: 8),
+
+            // ===== Δ 复习：代入与结果 =====
+            _text('0) Determinant (Δ)', bold: true),
+            _texScroll(r'\Delta = S_{11}S_{22}-S_{12}S_{21}'),
+            _text('Substitution (only replace values):', bold: true),
+            _texScroll(
+              r'\Delta=(' +
+                  _latexComplexSafe(s11, displayFormat) +
+                  r')(' +
+                  _latexComplexSafe(s22, displayFormat) +
+                  r')-(' +
+                  _latexComplexSafe(s12, displayFormat) +
+                  r')(' +
+                  _latexComplexSafe(s21, displayFormat) +
+                  r')',
+            ),
+            _text('Result:', bold: true),
+            _texScroll(r'\Delta=' + _latexComplexSafe(delta, displayFormat)),
+            _texScroll(r'|\Delta|=' + _texNum(deltaAbs)),
+            const Divider(),
+
+            // ===== K =====
+            _text('1) Rollett Factor (K)', bold: true),
+            _texScroll(r'K=\frac{1-|S_{11}|^2-|S_{22}|^2+|\Delta|^2}{2|S_{12}S_{21}|}'),
+            _text('Substitution (only replace values, do not simplify):', bold: true),
+            _texScroll(
+              _latexSubstitutionK(
+                s11Abs: s11Abs,
+                s22Abs: s22Abs,
+                deltaAbs: deltaAbs,
+                s12Abs: s12Abs,
+                s21Abs: s21Abs,
               ),
             ),
-            const SizedBox(height: 12),
-
-            _text('1. Rollett Factor (K)', bold: true),
-            _texScroll(
-                r'K = \frac{1 - |S_{11}|^2 - |S_{22}|^2 + |\Delta|^2}{2|S_{12} S_{21}|}'),
-            _text('Result:', bold: true),
-            _texScroll(r'K = \mathbf{' + _texNum(k) + r'}'),
+            _text('Computed Result:', bold: true),
+            _texScroll(r'K=\mathbf{' + _texNum(k) + r'}'),
+            _texScroll(r'|\Delta|=\mathbf{' + _texNum(deltaAbs) + r'}'),
+            _text(
+              stableByK ? '✓ Condition (A) satisfied: K > 1 and |Δ| < 1' : '✗ Condition (A) not satisfied',
+              bold: true,
+            ),
             const Divider(),
 
-            _text('2. Geometric Stability Factor (μ)', bold: true),
+            // ===== Kt =====
+            _text('2) Single-Parameter Stability Criterion (Kt)', bold: true),
             _texScroll(
-                r'\mu = \frac{1 - |S_{11}|^2}{|S_{22} - \Delta S_{11}^*| + |S_{12} S_{21}|}'),
-            _text('Result:', bold: true),
-            _texScroll(r'\mu = \mathbf{' + _texNum(mu) + r'}'),
+                r'K_t=\frac{3-2|S_{11}|^2-2|S_{22}|^2+|\Delta|^2-\left|1-|\Delta|^2\right|}{4|S_{12}S_{21}|}'),
+            _text('Substitution (only replace values, do not simplify):', bold: true),
+            _texScroll(
+              _latexSubstitutionKt(
+                s11Abs: s11Abs,
+                s22Abs: s22Abs,
+                deltaAbs: deltaAbs,
+                s12Abs: s12Abs,
+                s21Abs: s21Abs,
+              ),
+            ),
+            _text('Computed Result:', bold: true),
+            _texScroll(r'K_t=\mathbf{' + _texNum(kt) + r'}'),
+            _text(
+              stableByKt ? '✓ Condition (B) satisfied: Kt > 1' : '✗ Condition (B) not satisfied',
+              bold: true,
+            ),
             const Divider(),
 
-            _text('3. Geometric Stability Factor (μ\')', bold: true),
+            // ===== μ =====
+            _text('3) Geometric Stability Factor (μ)', bold: true),
+            _texScroll(r'\mu=\frac{1-|S_{11}|^2}{|S_{22}-\Delta S_{11}^*|+|S_{12}S_{21}|}'),
+            _text('Intermediate term (under current format):', bold: true),
             _texScroll(
-                r"\mu' = \frac{1 - |S_{22}|^2}{|S_{11} - \Delta S_{22}^*| + |S_{12} S_{21}|}"),
-            _text('Result:', bold: true),
-            _texScroll(r"\mu' = \mathbf{" + _texNum(muPrime) + r"}"),
+              r'S_{22}-\Delta S_{11}^* = (' +
+                  _latexComplexSafe(s22, displayFormat) +
+                  r')-(' +
+                  _latexComplexSafe(delta, displayFormat) +
+                  r')(' +
+                  _latexComplexSafe(s11.conjugate(), displayFormat) +
+                  r')',
+            ),
+            _texScroll(
+              r'S_{22}-\Delta S_{11}^*=' +
+                  _latexComplexSafe(term1MuComplex, displayFormat) +
+                  r',\quad |S_{22}-\Delta S_{11}^*|=' +
+                  _texNum(term1Mu),
+            ),
+            _text('Substitution (only replace values, do not simplify):', bold: true),
+            _texScroll(
+              _latexSubstitutionMu(
+                symbol: r'\mu',
+                sPortAbs: s11Abs,
+                termAbs: term1Mu,
+                s12Abs: s12Abs,
+                s21Abs: s21Abs,
+              ),
+            ),
+            _text('Computed Result:', bold: true),
+            _texScroll(r'\mu=\mathbf{' + _texNum(mu) + r'}'),
+            const Divider(),
+
+            // ===== μ' =====
+            _text("4) Geometric Stability Factor (μ')", bold: true),
+            _texScroll(r"\mu'=\frac{1-|S_{22}|^2}{|S_{11}-\Delta S_{22}^*|+|S_{12}S_{21}|}"),
+            _text('Intermediate term (under current format):', bold: true),
+            _texScroll(
+              r'S_{11}-\Delta S_{22}^* = (' +
+                  _latexComplexSafe(s11, displayFormat) +
+                  r')-(' +
+                  _latexComplexSafe(delta, displayFormat) +
+                  r')(' +
+                  _latexComplexSafe(s22.conjugate(), displayFormat) +
+                  r')',
+            ),
+            _texScroll(
+              r'S_{11}-\Delta S_{22}^*=' +
+                  _latexComplexSafe(term1MuPrimeComplex, displayFormat) +
+                  r",\quad |S_{11}-\Delta S_{22}^*|=" +
+                  _texNum(term1MuPrime),
+            ),
+            _text('Substitution (only replace values, do not simplify):', bold: true),
+            _texScroll(
+              _latexSubstitutionMu(
+                symbol: r"\mu'",
+                sPortAbs: s22Abs,
+                termAbs: term1MuPrime,
+                s12Abs: s12Abs,
+                s21Abs: s21Abs,
+              ),
+            ),
+            _text('Computed Result:', bold: true),
+            _texScroll(r"\mu'=\mathbf{" + _texNum(muPrime) + r"}"),
+            _text(
+              stableByMu ? "✓ Condition (C) satisfied: μ > 1 and μ' > 1" : "✗ Condition (C) not satisfied",
+              bold: true,
+            ),
+
             const SizedBox(height: 12),
 
             Container(
@@ -569,8 +909,9 @@ class AmplifierCalculator {
                 color: isUnconditionallyStable ? Colors.green[50] : Colors.orange[50],
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(
-                    color: isUnconditionallyStable ? Colors.green : Colors.deepOrange,
-                    width: 2),
+                  color: isUnconditionallyStable ? Colors.green : Colors.deepOrange,
+                  width: 2,
+                ),
               ),
               child: Row(
                 children: [
@@ -594,7 +935,9 @@ class AmplifierCalculator {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          isUnconditionallyStable ? "Satisfies μ > 1." : "μ < 1. Check Stability Circles.",
+                          isUnconditionallyStable
+                              ? "At least one sufficient condition (A/B/C) is satisfied."
+                              : "None of (A/B/C) is satisfied. Use stability circles/regions.",
                           style: TextStyle(
                             color: isUnconditionallyStable ? Colors.green[700] : Colors.deepOrange[700],
                             fontSize: 13,
@@ -692,16 +1035,25 @@ class _AmplifierHomePageState extends State<AmplifierHomePage> {
   // 与 AmplifierCalculator 同步的 eps（仅用于 UI 绘图保护）
   static const double _eps = 1e-12;
 
+  // ✅ UI 侧也支持 +/-∞（用于 k/kt 的额外判断）
   double _safeDivD(double num, double den) {
-    if (den.abs() < _eps) return double.nan;
+    if (num.isNaN || den.isNaN) return double.nan;
+
+    if (den.abs() < _eps) {
+      if (num == 0.0) return double.nan;
+      final sNum = num.isNegative ? -1.0 : 1.0;
+      final sDen = (den == 0.0) ? 1.0 : (den.isNegative ? -1.0 : 1.0);
+      final sign = sNum * sDen;
+      return sign < 0 ? double.negativeInfinity : double.infinity;
+    }
+
     final out = num / den;
-    if (out.isNaN || out.isInfinite) return double.nan;
+    if (out.isNaN) return double.nan;
     return out;
   }
 
   // =================== 示例列表（ 4-1 / 4-2） ===================
   late final List<ExamplePreset> _examples = [
-    // Example 4-1 (book)
     const ExamplePreset(
       name: 'Example 4-1 (MESFET, 9 GHz)',
       freqGHz: '9',
@@ -717,8 +1069,6 @@ class _AmplifierHomePageState extends State<AmplifierHomePage> {
       s22Mag: '0.781',
       s22Ang: '-27.6',
     ),
-
-    // Example 4-2 (book)
     const ExamplePreset(
       name: 'Example 4-2 (Transistor, 9 GHz)',
       freqGHz: '9',
@@ -734,8 +1084,6 @@ class _AmplifierHomePageState extends State<AmplifierHomePage> {
       s22Mag: '0.8',
       s22Ang: '-35',
     ),
-
-    // Unilateral test (skip circles/regions)
     const ExamplePreset(
       name: 'Unilateral Test (S12 ≈ 0)',
       freqGHz: '9',
@@ -751,14 +1099,12 @@ class _AmplifierHomePageState extends State<AmplifierHomePage> {
       s22Mag: '0.6',
       s22Ang: '-20',
     ),
-
-    // Γin singularity-ish: make ΓL ~ 1 by huge ZL and S22 ~ 1∠0
     const ExamplePreset(
       name: 'Singularity Test (1 - S22·ΓL ≈ 0)',
       freqGHz: '9',
       z0: '50',
       zs: '50',
-      zl: '1000000000', // huge -> ΓL ~ 1
+      zl: '1000000000',
       s11Mag: '0.5',
       s11Ang: '-10',
       s12Mag: '0.05',
@@ -768,13 +1114,11 @@ class _AmplifierHomePageState extends State<AmplifierHomePage> {
       s22Mag: '1.0',
       s22Ang: '0',
     ),
-
-    // Reflection coefficient singularity: Zs = -Z0 => denom ~ 0
     const ExamplePreset(
       name: 'Z Singularity Test (Zs + Z0 ≈ 0)',
       freqGHz: '9',
       z0: '50',
-      zs: '-50', // Zs + Z0 = 0
+      zs: '-50',
       zl: '50',
       s11Mag: '0.8',
       s11Ang: '-45',
@@ -785,8 +1129,6 @@ class _AmplifierHomePageState extends State<AmplifierHomePage> {
       s22Mag: '0.7',
       s22Ang: '-10',
     ),
-
-    // A more “aggressive feedback” case (often μ < 1)
     const ExamplePreset(
       name: 'Potentially Unstable (strong feedback)',
       freqGHz: '9',
@@ -807,9 +1149,7 @@ class _AmplifierHomePageState extends State<AmplifierHomePage> {
   int _exampleIndex = 0;
 
   void _applyExample(ExamplePreset ex) {
-    // 示例统一按 Polar(deg) 写入（避免格式错配导致解析异常）
     _currentFormat = ComplexInputFormat.polarDegree;
-
     freqController.text = ex.freqGHz;
     z0C.text = ex.z0;
     zsC.text = ex.zs;
@@ -832,7 +1172,6 @@ class _AmplifierHomePageState extends State<AmplifierHomePage> {
     setState(() {
       _exampleIndex = (_exampleIndex + 1) % _examples.length;
 
-      // 先清空旧状态，避免“旧面板长度”与新面板长度瞬间错配
       _stepPanels = [];
       _expandedList = [];
 
@@ -854,7 +1193,6 @@ class _AmplifierHomePageState extends State<AmplifierHomePage> {
       _applyExample(_examples[_exampleIndex]);
     });
 
-    // 直接算（不弹 SnackBar）
     calculate();
   }
 
@@ -887,9 +1225,8 @@ class _AmplifierHomePageState extends State<AmplifierHomePage> {
           c2.text = ComplexFormatter.smartFormat(c.imaginary, useScientific: false, precision: 6);
         } else {
           c1.text = ComplexFormatter.smartFormat(c.modulus, useScientific: false, precision: 6);
-          double angle = (newFormat == ComplexInputFormat.polarDegree)
-              ? c.phase() * 180 / pi
-              : c.phase();
+          double angle =
+          (newFormat == ComplexInputFormat.polarDegree) ? c.phase() * 180 / pi : c.phase();
           c2.text = ComplexFormatter.smartFormat(angle, useScientific: false, precision: 6);
         }
       }
@@ -919,9 +1256,6 @@ class _AmplifierHomePageState extends State<AmplifierHomePage> {
     final zs = double.tryParse(zsC.text) ?? 50.0;
     final zl = double.tryParse(zlC.text) ?? 50.0;
 
-    // =========================================================
-    // Unilateral detection (UI-level): 用于“彻底跳过 circle/region”
-    // =========================================================
     const double unilateralEps = 1e-9;
     final bool isUnilateral = (s12.modulus < unilateralEps || s21.modulus < unilateralEps);
 
@@ -936,10 +1270,10 @@ class _AmplifierHomePageState extends State<AmplifierHomePage> {
     );
 
     final stepPanels = amplifier.buildStepPanels(_currentFormat);
-
-    // 关键：每次重算都重置 expandedList，彻底避免 “Unexpected null value”/越界类错误
     _expandedList = List.generate(stepPanels.length, (_) => false);
 
+    // ✅ unilateral：步骤面板里已继续计算并显示 K/Kt/μ/μ'（允许 ±∞）
+    // UI 侧仍不画 stability circles/regions（它们对 unilateral 可能无意义/易崩）
     if (isUnilateral) {
       setState(() {
         _stepPanels = stepPanels;
@@ -963,6 +1297,42 @@ class _AmplifierHomePageState extends State<AmplifierHomePage> {
     }
 
     final delta = s11 * s22 - s12 * s21;
+
+    // ===== UI侧也用同一套“最终稳定”判定：A/B/C 任意满足即可视为无条件稳定 =====
+    final double s11AbsVal = s11.modulus;
+    final double s22AbsVal = s22.modulus;
+    final double s12AbsVal = s12.modulus;
+    final double s21AbsVal = s21.modulus;
+
+    final double s11MagSq = s11AbsVal * s11AbsVal;
+    final double s22MagSq = s22AbsVal * s22AbsVal;
+    final double deltaAbsVal = delta.modulus;
+    final double deltaMagSq = deltaAbsVal * deltaAbsVal;
+
+    final double k =
+    _safeDivD(1.0 - s11MagSq - s22MagSq + deltaMagSq, 2.0 * s12AbsVal * s21AbsVal);
+    final double kt = _safeDivD(
+      3.0 - 2.0 * s11MagSq - 2.0 * s22MagSq + deltaMagSq - (1.0 - deltaMagSq).abs(),
+      4.0 * s12AbsVal * s21AbsVal,
+    );
+
+    final double mu = _safeDivD(
+      1.0 - s11MagSq,
+      (s22 - delta * s11.conjugate()).modulus + (s12AbsVal * s21AbsVal),
+    );
+    final double muPrime = _safeDivD(
+      1.0 - s22MagSq,
+      (s11 - delta * s22.conjugate()).modulus + (s12AbsVal * s21AbsVal),
+    );
+
+    final bool stableByK = (k > 1.0) && (deltaAbsVal < 1.0);
+    final bool stableByKt = (kt > 1.0);
+    final bool stableByMu = (mu > 1.0) && (muPrime > 1.0);
+    final bool isUnconditionallyStable = stableByK || stableByKt || stableByMu;
+
+    isPotentiallyUnstableSource = !isUnconditionallyStable;
+    isPotentiallyUnstableLoad = !isUnconditionallyStable;
+
     final stability = StabilityCircleCalculator(
       s11: s11,
       s12: s12,
@@ -978,15 +1348,6 @@ class _AmplifierHomePageState extends State<AmplifierHomePage> {
     loadRadius = stability.loadRadius;
     s22Abs = s22.modulus;
     s11Abs = s11.modulus;
-
-    final double s11MagSq = pow(s11.modulus, 2).toDouble();
-    final term1 = (s22 - delta * s11.conjugate()).modulus;
-    final double term2 = s12.modulus * s21.modulus;
-    final double mu = _safeDivD((1.0 - s11MagSq), (term1 + term2));
-
-    bool isUnconditionallyStable = (mu > 1);
-    isPotentiallyUnstableSource = !isUnconditionallyStable;
-    isPotentiallyUnstableLoad = !isUnconditionallyStable;
 
     final region = StabilityRegionDetector(
       s11: s11,
