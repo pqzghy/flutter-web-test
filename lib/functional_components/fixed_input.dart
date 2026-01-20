@@ -6,18 +6,19 @@ class ComplexInputRow extends StatelessWidget {
   final TextEditingController ctrl1;
   final TextEditingController ctrl2;
   final String paramName;
+  final String? Function(String?)? validator;
 
   const ComplexInputRow({
     required this.format,
     required this.ctrl1,
     required this.ctrl2,
     required this.paramName,
+    this.validator,
     Key? key,
   }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
-    // 1. 根据格式定义显示的文案和符号
     String label1Text;
     String label2Text;
     String middleSymbol;
@@ -25,7 +26,7 @@ class ComplexInputRow extends StatelessWidget {
 
     switch (format) {
       case ComplexInputFormat.cartesian:
-        label1Text = "Real"; // 简化文案，留出更多空间给数字
+        label1Text = "Real";
         label2Text = "Imag";
         middleSymbol = "+";
         suffix2 = "j";
@@ -45,16 +46,18 @@ class ComplexInputRow extends StatelessWidget {
     }
 
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8), // 增加垂直间距，让行与行之间不那么挤
+      padding: const EdgeInsets.symmetric(vertical: 8),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // 参数名 (S11 等) - 加宽一点，防止 S12 (Check U) 这种换行
-          SizedBox(
-            width: 42,
-            child: Text(
-              paramName.split(' ')[0], // 只取 S11/S12 等前缀，避免太长
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          Padding(
+            padding: const EdgeInsets.only(top: 14),
+            child: SizedBox(
+              width: 42,
+              child: Text(
+                paramName.split(' ')[0],
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
             ),
           ),
 
@@ -63,12 +66,13 @@ class ComplexInputRow extends StatelessWidget {
             child: _buildTextField(
               controller: ctrl1,
               labelText: label1Text,
+              validator: validator,
             ),
           ),
 
           // 中间符号
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 14), // 【微调】垂直居中
             child: Text(
               middleSymbol,
               style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
@@ -81,6 +85,7 @@ class ComplexInputRow extends StatelessWidget {
               controller: ctrl2,
               labelText: label2Text,
               suffix: suffix2,
+              validator: validator,
             ),
           ),
         ],
@@ -93,23 +98,23 @@ class ComplexInputRow extends StatelessWidget {
     required TextEditingController controller,
     required String labelText,
     String? suffix,
+    String? Function(String?)? validator,
   }) {
-    return TextField(
+    return TextFormField(
       controller: controller,
-      // 弹出带小数点的数字键盘
+      validator: validator,
       keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true),
-      // 【改动点】字体变大
       style: const TextStyle(fontSize: 16),
       textAlignVertical: TextAlignVertical.center,
       decoration: InputDecoration(
         labelText: labelText,
         floatingLabelBehavior: FloatingLabelBehavior.auto,
-        // 【改动点】增加内边距，让框变高、变大
         contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
         isDense: true,
         border: const OutlineInputBorder(),
         suffixText: suffix,
         suffixStyle: const TextStyle(color: Colors.black87, fontSize: 16, fontWeight: FontWeight.w500),
+        errorStyle: const TextStyle(height: 0.8),
       ),
     );
   }

@@ -54,8 +54,6 @@ class StabilityRegionDetector {
     final den_source_tex = '|${_fmtC(s11, displayFormat)}|^2 - |${_fmtC(delta, displayFormat)}|^2';
 
     // 1.2 Source 判据逻辑
-    // 修正：根据教科书 (Pozar)，Source Stability Circle (Input Plane)
-    // 如果 |S11| < 1，则原点 (Gamma_S=0) 是稳定的。
     bool sourceOriginStableCheck = s11.modulus < 1.0;
     bool sourceCircleContainsOrigin = circleResult.sourceCenter.abs() < circleResult.sourceRadius;
 
@@ -137,10 +135,6 @@ class StabilityRegionDetector {
         ],
       ),
     );
-
-    // 【重要修正】：移除了 Divider，防止索引错位导致 Load 部分消失
-    // widgets.add(Divider...); <--- DELETED
-
     // =========================================================================
     // PART 2: Load (Output) Stability Circle Analysis
     // =========================================================================

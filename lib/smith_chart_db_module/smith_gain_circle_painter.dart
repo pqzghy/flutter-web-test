@@ -44,7 +44,7 @@ class SmithGainCirclePainter extends StatelessWidget {
 class _SmithGainPainter extends CustomPainter {
   final List<GainCircleData> gainCircles;
 
-  // 鲜艳的颜色列表，用于循环分配给增益圆
+  // 颜色列表，用于循环分配给增益圆
   final List<Color> circleColors = [
     Colors.blueAccent,    // 亮蓝
     Colors.green,         // 绿

@@ -131,7 +131,6 @@ class ComplexFormatter {
   }
 
   /// 智能数字格式化
-  /// 修复：参数改为 num? 以兼容 int 和 null，防止报错
   static String smartFormat(num? val, {bool useScientific = true, int precision = 4, bool useLatex = false}) {
     if (val == null) return '';
     if (val.isNaN) return "NaN";
@@ -175,11 +174,9 @@ class ComplexFormatter {
         return '${smartFormat(re, precision: precision)}$sign${smartFormat(im.abs(), precision: precision)}j';
 
       case ComplexInputFormat.polarDegree:
-      // 修复：phase 改为 phase()
         return '${smartFormat(c.modulus, precision: precision)}∠${smartFormat(c.phase() * 180 / pi, precision: precision)}°';
 
       case ComplexInputFormat.polarRadian:
-      // 修复：phase 改为 phase()
         return '${smartFormat(c.modulus, precision: precision)}∠${smartFormat(c.phase(), precision: precision)}rad';
     }
   }
@@ -199,11 +196,9 @@ class ComplexFormatter {
         return '${fmtNum(re)} $sign ${fmtNum(im.abs())}j';
 
       case ComplexInputFormat.polarDegree:
-      // 修复：phase 改为 phase()
         return '${fmtNum(c.modulus)} \\angle ${fmtNum(c.phase() * 180 / pi)}^{\\circ}';
 
       case ComplexInputFormat.polarRadian:
-      // 修复：phase 改为 phase()
         return '${fmtNum(c.modulus)} \\angle ${fmtNum(c.phase())}\\text{ rad}';
     }
   }
@@ -241,4 +236,20 @@ class ComplexInputUtil {
     String sign = i.startsWith('-') ? '' : '+';
     return '$r$sign${i}j';
   }
+}
+
+// ==========================================
+// 6. 通用校验器 (新增功能)
+// ==========================================
+
+/// 通用的数字校验器
+/// 作用：检查输入框是否为空，或者是否为非数字
+String? commonValidator(String? value) {
+  if (value == null || value.isEmpty) {
+    return 'Required'; // 提示：必填
+  }
+  if (double.tryParse(value) == null) {
+    return 'Num Only'; // 提示：只能填数字
+  }
+  return null; // 校验通过
 }
