@@ -1,6 +1,10 @@
+import 'dart:async';
+import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:equations/equations.dart';
-import 'dart:math';
+import 'package:flutter_math_fork/flutter_math.dart';
+
 import '../input_and_output_functions/utils.dart';
 import '../functional_components/fixed_input.dart';
 import '../functional_components/menu_functions.dart';
@@ -10,14 +14,11 @@ import '../simple_smith_chart_stability_judgment_module/smith_chart_widget.dart'
 import '../simple_smith_chart_stability_judgment_module/stability_circle_calculator.dart';
 import '../simple_smith_chart_stability_judgment_module/stability_region_detector.dart';
 
-// 数学公式渲染库
-import 'package:flutter_math_fork/flutter_math.dart';
-
 // =================== StepPanel 数据结构 ===================
 class StepPanel {
-  final String title;
+  final String titleLatex;
   final List<Widget> content;
-  StepPanel({required this.title, required this.content});
+  StepPanel({required this.titleLatex, required this.content});
 }
 
 // =================== AmplifierCalculator (核心计算逻辑类) ===================
@@ -37,19 +38,16 @@ class AmplifierCalculator {
   });
 
   // =================== NaN / Inf Protection ===================
-  // 只做保护，不改任何原公式与数据流；遇到奇点就输出 NaN/Inf，让 UI 显示 Error 而不是崩溃。
   static const double _eps = 1e-12;
 
   bool _isBad(double x) => x.isNaN || x.isInfinite;
 
-  // 安全显示 double：避免 smartFormat(NaN/Inf) 导致崩溃
   String _texNumSafe(double val) {
     if (val.isNaN) return r'\text{NaN}';
     if (val.isInfinite) return val.isNegative ? r'-\infty' : r'\infty';
     return ComplexFormatter.smartFormat(val, useLatex: true, precision: 4);
   }
 
-  // 安全显示 Complex：避免 ComplexFormatter.latex 遇到 NaN/Inf 崩溃
   String _latexComplexSafe(Complex c, ComplexInputFormat fmt) {
     final r = c.real;
     final i = c.imaginary;
@@ -57,7 +55,6 @@ class AmplifierCalculator {
     return ComplexFormatter.latex(c, fmt);
   }
 
-  // 安全显示 Hybrid（用于 Γs/ΓL 等）
   String _latexHybridSafe(Complex c, {int precision = 4}) {
     final r = c.real;
     final i = c.imaginary;
@@ -65,7 +62,6 @@ class AmplifierCalculator {
     return ComplexFormatter.latexHybrid(c, precision: precision);
   }
 
-  // 安全复数除法：分母太小 => NaN（不改公式，只做定义域保护）
   Complex _safeDiv(Complex num, Complex den) {
     if (den.modulus < _eps) {
       return Complex(double.nan, double.nan);
@@ -77,14 +73,11 @@ class AmplifierCalculator {
     return out;
   }
 
-  // 安全实数除法（ +/-∞ 判断）
   double _safeDivD(double num, double den) {
     if (num.isNaN || den.isNaN) return double.nan;
 
-    // 分母过小：按数学极限给出 +/-∞ 或 NaN(0/0)
     if (den.abs() < _eps) {
-      if (num == 0.0) return double.nan; // 0/0 -> NaN
-      // 保留符号：sign(num) * sign(den)
+      if (num == 0.0) return double.nan;
       final sNum = num.isNegative ? -1.0 : 1.0;
       final sDen = (den == 0.0) ? 1.0 : (den.isNegative ? -1.0 : 1.0);
       final sign = sNum * sDen;
@@ -93,7 +86,6 @@ class AmplifierCalculator {
 
     final out = num / den;
     if (out.isNaN) return double.nan;
-    // out 允许为 +/-∞，不拦截（用户要求判断正负无穷）
     return out;
   }
 
@@ -123,16 +115,13 @@ class AmplifierCalculator {
     );
   }
 
-  // 辅助函数：智能格式化数值 —— 安全版
   String _texNum(double val) => _texNumSafe(val);
 
-  // 辅助函数：生成标准化的结果行 (数值 + dB)
   String formatResultLine(String label, double val) {
     String dbPart;
     if (val.isNaN) {
       dbPart = r'\text{Error}';
     } else if (val.isInfinite) {
-      // 无穷时不输出 dB，避免误导
       dbPart = r'\text{∞ (singularity)}';
     } else if (val <= 0) {
       dbPart = r'\text{Unstable } (<0)';
@@ -195,9 +184,9 @@ class AmplifierCalculator {
   }
 
   String _latexSubstitutionMu({
-    required String symbol, // r'\mu' 或 r"\mu'"
-    required double sPortAbs, // |S11| 或 |S22|
-    required double termAbs, // |S22 - ΔS11*| 或 |S11 - ΔS22*|
+    required String symbol,
+    required double sPortAbs,
+    required double termAbs,
     required double s12Abs,
     required double s21Abs,
   }) {
@@ -214,13 +203,11 @@ class AmplifierCalculator {
         r')}';
   }
 
-  // 核心方法：构建计算步骤面板
+  //  构建计算步骤面板
   List<StepPanel> buildStepPanels(ComplexInputFormat displayFormat) {
     final panels = <StepPanel>[];
 
-    // =========================================================
     // Step 1: Reflection Coefficients (Γs, ΓL)
-    // =========================================================
     final zsStr = ComplexFormatter.smartFormat(zs);
     final zlStr = ComplexFormatter.smartFormat(zl);
     final z0Str = ComplexFormatter.smartFormat(z0);
@@ -230,12 +217,10 @@ class AmplifierCalculator {
 
     panels.add(
       StepPanel(
-        title: '1. Reflection Coefficients (Γs, ΓL)',
+        titleLatex: r'1.\ \text{Reflection Coefficients}\ (\Gamma_S,\ \Gamma_L)',
         content: [
           _text('Calculate normalized reflection coefficients based on Zs, ZL, Z0.'),
-          _texScroll(
-            r'Z_0 = ' + z0Str + r', \ \ \ Z_s = ' + zsStr + r', \ \ \ Z_L = ' + zlStr,
-          ),
+          _texScroll(r'Z_0 = ' + z0Str + r', \ \ \ Z_s = ' + zsStr + r', \ \ \ Z_L = ' + zlStr),
           _text('Formula:', bold: true),
           _texScroll(r'\Gamma = \frac{Z - Z_0}{Z + Z_0}'),
           _text('Substitution:', bold: true),
@@ -272,28 +257,27 @@ class AmplifierCalculator {
       ),
     );
 
-    // =========================================================
     // Step 2: Determinant (Δ)
-    // =========================================================
     final delta = s11 * s22 - s12 * s21;
 
     panels.add(
       StepPanel(
-        title: '2. Determinant (Δ)',
+        titleLatex: r'2.\ \text{Determinant}\ (\Delta)',
         content: [
           _text('Formula:', bold: true),
           _texScroll(r'\Delta = S_{11} S_{22} - S_{12} S_{21}'),
           _text('Substitution:', bold: true),
-          _texScroll(r'\Delta = (' +
-              _latexComplexSafe(s11, displayFormat) +
-              r')(' +
-              _latexComplexSafe(s22, displayFormat) +
-              r') - ' +
-              r'(' +
-              _latexComplexSafe(s12, displayFormat) +
-              r')(' +
-              _latexComplexSafe(s21, displayFormat) +
-              r')'),
+          _texScroll(
+            r'\Delta = (' +
+                _latexComplexSafe(s11, displayFormat) +
+                r')(' +
+                _latexComplexSafe(s22, displayFormat) +
+                r') - (' +
+                _latexComplexSafe(s12, displayFormat) +
+                r')(' +
+                _latexComplexSafe(s21, displayFormat) +
+                r')',
+          ),
           const Divider(),
           _text('Result:', bold: true),
           _texScroll(r'\Delta = ' + _latexComplexSafe(delta, displayFormat)),
@@ -302,9 +286,7 @@ class AmplifierCalculator {
       ),
     );
 
-    // =========================================================
     // Step 3: Input/Output Reflection (Γin, Γout)
-    // =========================================================
     final numeratorIn = s12 * s21 * gammaL;
     final denominatorIn = Complex(1, 0) - s22 * gammaL;
     final gammaIn = s11 + _safeDiv(numeratorIn, denominatorIn);
@@ -318,59 +300,74 @@ class AmplifierCalculator {
 
     panels.add(
       StepPanel(
-        title: '3. Input/Output Reflection (Γin, Γout)',
+        titleLatex: r'3.\ \text{Input/Output Reflection}\ (\Gamma_{in},\ \Gamma_{out})',
         content: [
+          // ===== Γin =====
+          _text('Input Reflection (Γin)', bold: true),
           _text('Formula:', bold: true),
-          _texScroll(
-              r'\Gamma_{in} = S_{11} + \frac{S_{12} S_{21} \Gamma_L}{1 - S_{22} \Gamma_L}'),
+          _texScroll(r'\Gamma_{in} = S_{11} + \frac{S_{12} S_{21} \Gamma_L}{1 - S_{22} \Gamma_L}'),
           _text('Substitution:', bold: true),
-          _texScroll(r'\Gamma_{in} = ' +
-              _latexComplexSafe(s11, displayFormat) +
-              r' + \frac{(' +
-              _latexComplexSafe(s12, displayFormat) +
-              r')(' +
-              _latexComplexSafe(s21, displayFormat) +
-              r')(' +
-              _latexComplexSafe(gammaL, displayFormat) +
-              r')}' +
-              r'{1 - (' +
-              _latexComplexSafe(s22, displayFormat) +
-              r')(' +
-              _latexComplexSafe(gammaL, displayFormat) +
-              r')}'),
+          _texScroll(
+            r'\Gamma_{in} = ' +
+                _latexComplexSafe(s11, displayFormat) +
+                r' + \frac{(' +
+                _latexComplexSafe(s12, displayFormat) +
+                r')(' +
+                _latexComplexSafe(s21, displayFormat) +
+                r')(' +
+                _latexComplexSafe(gammaL, displayFormat) +
+                r')}{1 - (' +
+                _latexComplexSafe(s22, displayFormat) +
+                r')(' +
+                _latexComplexSafe(gammaL, displayFormat) +
+                r')}',
+          ),
           if (singularIn)
-            _text(
-              '⚠ Warning: (1 - S22·ΓL) ≈ 0, Γin is near a singularity (may become NaN/∞).',
-              bold: true,
-            ),
-          if (singularOut)
-            _text(
-              '⚠ Warning: (1 - S11·ΓS) ≈ 0, Γout is near a singularity (may become NaN/∞).',
-              bold: true,
-            ),
-          const Divider(),
+            _text('⚠ Warning: (1 - S22·ΓL) ≈ 0, Γin is near a singularity (may become NaN/∞).', bold: true),
           _text('Result:', bold: true),
           _texScroll(r'\Gamma_{in} = ' + _latexComplexSafe(gammaIn, displayFormat)),
+
+          const Divider(),
+
+          // ===== Γout =====
+          _text('Output Reflection (Γout)', bold: true),
+          _text('Formula:', bold: true),
+          _texScroll(r'\Gamma_{out} = S_{22} + \frac{S_{12} S_{21} \Gamma_S}{1 - S_{11} \Gamma_S}'),
+          _text('Substitution:', bold: true),
+          _texScroll(
+            r'\Gamma_{out} = ' +
+                _latexComplexSafe(s22, displayFormat) +
+                r' + \frac{(' +
+                _latexComplexSafe(s12, displayFormat) +
+                r')(' +
+                _latexComplexSafe(s21, displayFormat) +
+                r')(' +
+                _latexComplexSafe(gammaS, displayFormat) +
+                r')}{1 - (' +
+                _latexComplexSafe(s11, displayFormat) +
+                r')(' +
+                _latexComplexSafe(gammaS, displayFormat) +
+                r')}',
+          ),
+          if (singularOut)
+            _text('⚠ Warning: (1 - S11·ΓS) ≈ 0, Γout is near a singularity (may become NaN/∞).', bold: true),
+          _text('Result:', bold: true),
           _texScroll(r'\Gamma_{out} = ' + _latexComplexSafe(gammaOut, displayFormat)),
         ],
       ),
     );
 
-    // =========================================================
+
     // Step 4: Power Gains (Gt, Gp, Ga)
-    // =========================================================
     final double gsMagSq = pow(gammaS.modulus, 2).toDouble();
     final double glMagSq = pow(gammaL.modulus, 2).toDouble();
     final double s21MagSq = pow(s21.modulus, 2).toDouble();
     final double ginMagSq = pow(gammaIn.modulus, 2).toDouble();
     final double goutMagSq = pow(gammaOut.modulus, 2).toDouble();
 
-    final double denom_In_S =
-    pow((Complex(1, 0) - gammaIn * gammaS).modulus, 2).toDouble();
-    final double denom_22_L =
-    pow((Complex(1, 0) - s22 * gammaL).modulus, 2).toDouble();
-    final double denom_11_S =
-    pow((Complex(1, 0) - s11 * gammaS).modulus, 2).toDouble();
+    final double denom_In_S = pow((Complex(1, 0) - gammaIn * gammaS).modulus, 2).toDouble();
+    final double denom_22_L = pow((Complex(1, 0) - s22 * gammaL).modulus, 2).toDouble();
+    final double denom_11_S = pow((Complex(1, 0) - s11 * gammaS).modulus, 2).toDouble();
 
     final double gt_term1_num = 1.0 - gsMagSq;
     final double gt_term1 = _safeDivD(gt_term1_num, denom_In_S);
@@ -387,10 +384,9 @@ class AmplifierCalculator {
 
     panels.add(
       StepPanel(
-        title: '4. Power Gains (Gt, Gp, Ga)',
+        titleLatex: r'4.\ \text{Power Gains}\ (G_t,\ G_p,\ G_a)',
         content: [
-          _text(
-              'To calculate gains, we break down the formula into three parts: Input Mismatch, Device Gain, and Output Mismatch.'),
+          _text('To calculate gains, we break down the formula into three parts: Input Mismatch, Device Gain, and Output Mismatch.'),
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(12),
@@ -403,10 +399,7 @@ class AmplifierCalculator {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 _text('Known Values (Pre-calculated):', bold: true),
-                _texScroll(r'|\Gamma_S|^2 = ' +
-                    _texNum(gsMagSq) +
-                    r', \quad |\Gamma_L|^2 = ' +
-                    _texNum(glMagSq)),
+                _texScroll(r'|\Gamma_S|^2 = ' + _texNum(gsMagSq) + r', \quad |\Gamma_L|^2 = ' + _texNum(glMagSq)),
                 _texScroll(r'|S_{21}|^2 = ' + _texNum(s21MagSq)),
                 _texScroll(r'|1 - \Gamma_{in}\Gamma_S|^2 = ' + _texNum(denom_In_S)),
                 _texScroll(r'|1 - S_{22}\Gamma_L|^2 = ' + _texNum(denom_22_L)),
@@ -418,67 +411,69 @@ class AmplifierCalculator {
           const SizedBox(height: 12),
           _text('1. Transducer Power Gain (Gt)', bold: true),
           _texScroll(
-              r'G_t = \underbrace{\frac{1 - |\Gamma_S|^2}{|1 - \Gamma_{in}\Gamma_S|^2}}_{\text{Input}} \cdot \underbrace{|S_{21}|^2}_{\text{Device}} \cdot \underbrace{\frac{1 - |\Gamma_L|^2}{|1 - S_{22}\Gamma_L|^2}}_{\text{Output}}'),
+            r'G_t = \underbrace{\frac{1 - |\Gamma_S|^2}{|1 - \Gamma_{in}\Gamma_S|^2}}_{\text{Input}} \cdot '
+            r'\underbrace{|S_{21}|^2}_{\text{Device}} \cdot '
+            r'\underbrace{\frac{1 - |\Gamma_L|^2}{|1 - S_{22}\Gamma_L|^2}}_{\text{Output}}',
+          ),
           _text('Substitution:', bold: true),
-          _texScroll(r'G_t \approx \left( \frac{1 - ' +
-              _texNum(gsMagSq) +
-              r'}{' +
-              _texNum(denom_In_S) +
-              r'} \right) \cdot ' +
-              _texNum(s21MagSq) +
-              r' \cdot \left( \frac{1 - ' +
-              _texNum(glMagSq) +
-              r'}{' +
-              _texNum(denom_22_L) +
-              r'} \right)'),
-          _texScroll(r'\Rightarrow G_t \approx (' +
-              _texNum(gt_term1) +
-              r') \cdot (' +
-              _texNum(s21MagSq) +
-              r') \cdot (' +
-              _texNum(gt_term3) +
-              r')'),
+          _texScroll(
+            r'G_t \approx \left( \frac{1 - ' +
+                _texNum(gsMagSq) +
+                r'}{' +
+                _texNum(denom_In_S) +
+                r'} \right) \cdot ' +
+                _texNum(s21MagSq) +
+                r' \cdot \left( \frac{1 - ' +
+                _texNum(glMagSq) +
+                r'}{' +
+                _texNum(denom_22_L) +
+                r'} \right)',
+          ),
+          _texScroll(r'\Rightarrow G_t \approx (' + _texNum(gt_term1) + r') \cdot (' + _texNum(s21MagSq) + r') \cdot (' + _texNum(gt_term3) + r')'),
           _text('Result:', bold: true),
           _texScroll(formatResultLine('G_t', gt)),
           const Divider(),
           _text('2. Operating Power Gain (Gp)', bold: true),
           _texScroll(
-              r'G_p = \frac{1}{1 - |\Gamma_{in}|^2} \cdot |S_{21}|^2 \cdot \frac{1 - |\Gamma_L|^2}{|1 - S_{22}\Gamma_L|^2}'),
+            r'G_p = \frac{1}{1 - |\Gamma_{in}|^2} \cdot |S_{21}|^2 \cdot \frac{1 - |\Gamma_L|^2}{|1 - S_{22}\Gamma_L|^2}',
+          ),
           _text('Substitution:', bold: true),
-          _texScroll(r'G_p \approx \left( \frac{1}{1 - ' +
-              _texNum(ginMagSq) +
-              r'} \right) \cdot ' +
-              _texNum(s21MagSq) +
-              r' \cdot (' +
-              _texNum(gt_term3) +
-              r')'),
+          _texScroll(
+            r'G_p \approx \left( \frac{1}{1 - ' +
+                _texNum(ginMagSq) +
+                r'} \right) \cdot ' +
+                _texNum(s21MagSq) +
+                r' \cdot (' +
+                _texNum(gt_term3) +
+                r')',
+          ),
           _text('Result:', bold: true),
           _texScroll(formatResultLine('G_p', gp)),
           const Divider(),
           _text('3. Available Power Gain (Ga)', bold: true),
           _texScroll(
-              r'G_a = \frac{1 - |\Gamma_S|^2}{|1 - S_{11}\Gamma_S|^2} \cdot |S_{21}|^2 \cdot \frac{1}{1 - |\Gamma_{out}|^2}'),
+            r'G_a = \frac{1 - |\Gamma_S|^2}{|1 - S_{11}\Gamma_S|^2} \cdot |S_{21}|^2 \cdot \frac{1}{1 - |\Gamma_{out}|^2}',
+          ),
           _text('Substitution:', bold: true),
-          _texScroll(r'G_a \approx (' +
-              _texNum(ga_term1) +
-              r') \cdot ' +
-              _texNum(s21MagSq) +
-              r' \cdot \left( \frac{1}{1 - ' +
-              _texNum(goutMagSq) +
-              r'} \right)'),
+          _texScroll(
+            r'G_a \approx (' +
+                _texNum(ga_term1) +
+                r') \cdot ' +
+                _texNum(s21MagSq) +
+                r' \cdot \left( \frac{1}{1 - ' +
+                _texNum(goutMagSq) +
+                r'} \right)',
+          ),
           _text('Result:', bold: true),
           _texScroll(formatResultLine('G_a', ga)),
         ],
       ),
     );
 
-    // =========================================================
     // Step 5: Stability Analysis (K, Δ, Kt, μ, μ')
-    // =========================================================
     const double epsilon = 1e-9;
     final bool isUnilateral = (s12.modulus < epsilon) || (s21.modulus < epsilon);
 
-    // ---- 共同计算（无论是否 unilateral 都计算，允许出现 +/-∞）----
     final double s11Abs = s11.modulus;
     final double s22Abs = s22.modulus;
     final double s12Abs = s12.modulus;
@@ -494,11 +489,7 @@ class AmplifierCalculator {
     final double k = _safeDivD(numeratorK, denomK);
 
     final double denomKt = 4.0 * s12Abs * s21Abs;
-    final double numeratorKt = 3.0 -
-        2.0 * s11MagSq2 -
-        2.0 * s22MagSq2 +
-        deltaMagSq2 -
-        (1.0 - deltaMagSq2).abs();
+    final double numeratorKt = 3.0 - 2.0 * s11MagSq2 - 2.0 * s22MagSq2 + deltaMagSq2 - (1.0 - deltaMagSq2).abs();
     final double kt = _safeDivD(numeratorKt, denomKt);
 
     final double muNumerator = 1.0 - s11MagSq2;
@@ -512,19 +503,16 @@ class AmplifierCalculator {
     final double term1MuPrime = term1MuPrimeComplex.modulus;
     final double muPrime = _safeDivD(muPrimeNumerator, (term1MuPrime + term2_stability));
 
-    // 条件（允许 k/kt 为 +/-∞）
     final bool stableByK = (k > 1.0) && (deltaAbs < 1.0);
     final bool stableByKt = (kt > 1.0);
     final bool stableByMu = (mu > 1.0) && (muPrime > 1.0);
 
     if (isUnilateral) {
-      // unilateral 情况下：最终判据仍以 |S11|<1 && |S22|<1 为主，
-      // 但 K/Kt/mu/mu' 仍继续计算并显示（可能为 +/-∞）。
       final bool isStableUni = (s11Abs < 1.0) && (s22Abs < 1.0);
 
       panels.add(
         StepPanel(
-          title: '5. Stability Analysis (Unilateral Case + K/Kt/μ Reference)',
+          titleLatex: r'5.\ \text{Stability Analysis (Unilateral)}\ (+K,\ K_t,\ \mu,\ \mu^\prime)',
           content: [
             Container(
               padding: const EdgeInsets.all(8),
@@ -544,13 +532,11 @@ class AmplifierCalculator {
               ),
             ),
             const SizedBox(height: 12),
-
             _text('Primary (Unilateral) Stability Check:', bold: true),
             _texScroll(r'|S_{11}| < 1 \quad \text{and} \quad |S_{22}| < 1'),
             _text('Substitution:', bold: true),
             _texScroll(r'|S_{11}| = ' + _texNum(s11Abs)),
             _texScroll(r'|S_{22}| = ' + _texNum(s22Abs)),
-
             const SizedBox(height: 12),
             Container(
               padding: const EdgeInsets.all(12),
@@ -584,9 +570,7 @@ class AmplifierCalculator {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          isStableUni
-                              ? "|S11| < 1 and |S22| < 1 satisfied."
-                              : "Input or Output port has negative resistance (|Sxx| > 1).",
+                          isStableUni ? "|S11| < 1 and |S22| < 1 satisfied." : "Input or Output port has negative resistance (|Sxx| > 1).",
                           style: TextStyle(
                             color: isStableUni ? Colors.green[700] : Colors.deepOrange[700],
                             fontSize: 13,
@@ -598,19 +582,15 @@ class AmplifierCalculator {
                 ],
               ),
             ),
-
             const Divider(),
-
             _text('Reference Computations (still computed):', bold: true),
 
-            // Δ
             _text('0) Determinant (Δ)', bold: true),
             _texScroll(r'\Delta = S_{11} S_{22} - S_{12} S_{21}'),
             _texScroll(r'\Delta = ' + _latexComplexSafe(delta, displayFormat)),
             _texScroll(r'|\Delta| = ' + _texNum(deltaAbs)),
             const Divider(),
 
-            // K
             _text('1) Rollett Factor (K)', bold: true),
             _texScroll(r'K=\frac{1-|S_{11}|^2-|S_{22}|^2+|\Delta|^2}{2|S_{12}S_{21}|}'),
             _text('Substitution (only replace values, do not simplify):', bold: true),
@@ -627,21 +607,16 @@ class AmplifierCalculator {
             _texScroll(r'K=\mathbf{' + _texNum(k) + r'}'),
             if (k.isInfinite)
               _text(
-                k.isNegative
-                    ? '⚠ K = −∞ (denominator → 0 and numerator < 0)'
-                    : '⚠ K = +∞ (denominator → 0 and numerator > 0)',
+                k.isNegative ? '⚠ K = −∞ (denominator → 0 and numerator < 0)' : '⚠ K = +∞ (denominator → 0 and numerator > 0)',
                 bold: true,
               ),
-            _text(
-              stableByK ? '✓ (A) satisfied (numerically): K > 1 and |Δ| < 1' : '✗ (A) not satisfied (numerically)',
-              bold: true,
-            ),
+            _text(stableByK ? '✓ (A) satisfied (numerically): K > 1 and |Δ| < 1' : '✗ (A) not satisfied (numerically)', bold: true),
             const Divider(),
 
-            // Kt
             _text('2) Single-Parameter Stability Criterion (Kt)', bold: true),
             _texScroll(
-                r'K_t=\frac{3-2|S_{11}|^2-2|S_{22}|^2+|\Delta|^2-\left|1-|\Delta|^2\right|}{4|S_{12}S_{21}|}'),
+              r'K_t=\frac{3-2|S_{11}|^2-2|S_{22}|^2+|\Delta|^2-\left|1-|\Delta|^2\right|}{4|S_{12}S_{21}|}',
+            ),
             _text('Substitution (only replace values, do not simplify):', bold: true),
             _texScroll(
               _latexSubstitutionKt(
@@ -656,21 +631,14 @@ class AmplifierCalculator {
             _texScroll(r'K_t=\mathbf{' + _texNum(kt) + r'}'),
             if (kt.isInfinite)
               _text(
-                kt.isNegative
-                    ? '⚠ Kt = −∞ (denominator → 0 and numerator < 0)'
-                    : '⚠ Kt = +∞ (denominator → 0 and numerator > 0)',
+                kt.isNegative ? '⚠ Kt = −∞ (denominator → 0 and numerator < 0)' : '⚠ Kt = +∞ (denominator → 0 and numerator > 0)',
                 bold: true,
               ),
-            _text(
-              stableByKt ? '✓ (B) satisfied (numerically): Kt > 1' : '✗ (B) not satisfied (numerically)',
-              bold: true,
-            ),
+            _text(stableByKt ? '✓ (B) satisfied (numerically): Kt > 1' : '✗ (B) not satisfied (numerically)', bold: true),
             const Divider(),
 
-            // μ
             _text('3) Geometric Stability Factor (μ)', bold: true),
             _texScroll(r'\mu=\frac{1-|S_{11}|^2}{|S_{22}-\Delta S_{11}^*|+|S_{12}S_{21}|}'),
-
             _text('Intermediate term (under current format):', bold: true),
             _texScroll(
               r'S_{22}-\Delta S_{11}^* = (' +
@@ -687,7 +655,6 @@ class AmplifierCalculator {
                   r',\quad |S_{22}-\Delta S_{11}^*|=' +
                   _texNum(term1Mu),
             ),
-
             _text('Substitution (only replace values, do not simplify):', bold: true),
             _texScroll(
               _latexSubstitutionMu(
@@ -700,15 +667,12 @@ class AmplifierCalculator {
                   r'\;=\;' +
                   _texNum(mu),
             ),
-
             _text('Computed Result:', bold: true),
             _texScroll(r'\mu=\mathbf{' + _texNum(mu) + r'}'),
             const Divider(),
 
-// μ'
             _text("4) Geometric Stability Factor (μ')", bold: true),
-            _texScroll(r"\mu'=\frac{1-|S_{22}|^2}{|S_{11}-\Delta S_{22}^*|+|S_{12}S_{21}|}"),
-
+            _texScroll(r"\mu^\prime=\frac{1-|S_{22}|^2}{|S_{11}-\Delta S_{22}^*|+|S_{12}S_{21}|}"),
             _text('Intermediate term (under current format):', bold: true),
             _texScroll(
               r'S_{11}-\Delta S_{22}^* = (' +
@@ -725,11 +689,10 @@ class AmplifierCalculator {
                   r",\quad |S_{11}-\Delta S_{22}^*|=" +
                   _texNum(term1MuPrime),
             ),
-
             _text('Substitution (only replace values, do not simplify):', bold: true),
             _texScroll(
               _latexSubstitutionMu(
-                symbol: r"\mu'",
+                symbol: r"\mu^\prime",
                 sPortAbs: s22Abs,
                 termAbs: term1MuPrime,
                 s12Abs: s12Abs,
@@ -738,10 +701,8 @@ class AmplifierCalculator {
                   r'\;=\;' +
                   _texNum(muPrime),
             ),
-
             _text('Computed Result:', bold: true),
-            _texScroll(r"\mu'=\mathbf{" + _texNum(muPrime) + r"}"),
-
+            _texScroll(r"\mu^\prime=\mathbf{" + _texNum(muPrime) + r"}"),
 
             const SizedBox(height: 8),
             _text(
@@ -753,22 +714,19 @@ class AmplifierCalculator {
         ),
       );
     } else {
-      // 双向（非 unilateral）分支
       final bool isUnconditionallyStable = stableByK || stableByKt || stableByMu;
 
       panels.add(
         StepPanel(
-          title: '5. Stability Analysis (K, Δ, Kt, μ, μ\')',
+          titleLatex: r'5.\ \text{Stability Analysis}\ (K,\ \Delta,\ K_t,\ \mu,\ \mu^\prime)',
           content: [
             _text('Stability criteria ensure the amplifier does not oscillate.'),
-
             _text('Unconditional Stability Conditions (Sufficient tests):', bold: true),
             _texScroll(r'\text{(A)}\;\;K>1 \ \text{and}\ |\Delta|<1'),
             _texScroll(r'\text{(B)}\;\;K_t>1'),
-            _texScroll(r"\text{(C)}\;\;\mu>1 \ \text{and}\ \mu'>1"),
+            _texScroll(r"\text{(C)}\;\;\mu>1 \ \text{and}\ \mu^\prime>1"),
             const SizedBox(height: 8),
 
-            // ===== Δ 复习：代入与结果 =====
             _text('0) Determinant (Δ)', bold: true),
             _texScroll(r'\Delta = S_{11}S_{22}-S_{12}S_{21}'),
             _text('Substitution (only replace values):', bold: true),
@@ -788,7 +746,6 @@ class AmplifierCalculator {
             _texScroll(r'|\Delta|=' + _texNum(deltaAbs)),
             const Divider(),
 
-            // ===== K =====
             _text('1) Rollett Factor (K)', bold: true),
             _texScroll(r'K=\frac{1-|S_{11}|^2-|S_{22}|^2+|\Delta|^2}{2|S_{12}S_{21}|}'),
             _text('Substitution (only replace values, do not simplify):', bold: true),
@@ -804,16 +761,13 @@ class AmplifierCalculator {
             _text('Computed Result:', bold: true),
             _texScroll(r'K=\mathbf{' + _texNum(k) + r'}'),
             _texScroll(r'|\Delta|=\mathbf{' + _texNum(deltaAbs) + r'}'),
-            _text(
-              stableByK ? '✓ Condition (A) satisfied: K > 1 and |Δ| < 1' : '✗ Condition (A) not satisfied',
-              bold: true,
-            ),
+            _text(stableByK ? '✓ Condition (A) satisfied: K > 1 and |Δ| < 1' : '✗ Condition (A) not satisfied', bold: true),
             const Divider(),
 
-            // ===== Kt =====
             _text('2) Single-Parameter Stability Criterion (Kt)', bold: true),
             _texScroll(
-                r'K_t=\frac{3-2|S_{11}|^2-2|S_{22}|^2+|\Delta|^2-\left|1-|\Delta|^2\right|}{4|S_{12}S_{21}|}'),
+              r'K_t=\frac{3-2|S_{11}|^2-2|S_{22}|^2+|\Delta|^2-\left|1-|\Delta|^2\right|}{4|S_{12}S_{21}|}',
+            ),
             _text('Substitution (only replace values, do not simplify):', bold: true),
             _texScroll(
               _latexSubstitutionKt(
@@ -826,13 +780,9 @@ class AmplifierCalculator {
             ),
             _text('Computed Result:', bold: true),
             _texScroll(r'K_t=\mathbf{' + _texNum(kt) + r'}'),
-            _text(
-              stableByKt ? '✓ Condition (B) satisfied: Kt > 1' : '✗ Condition (B) not satisfied',
-              bold: true,
-            ),
+            _text(stableByKt ? '✓ Condition (B) satisfied: Kt > 1' : '✗ Condition (B) not satisfied', bold: true),
             const Divider(),
 
-            // ===== μ =====
             _text('3) Geometric Stability Factor (μ)', bold: true),
             _texScroll(r'\mu=\frac{1-|S_{11}|^2}{|S_{22}-\Delta S_{11}^*|+|S_{12}S_{21}|}'),
             _text('Intermediate term (under current format):', bold: true),
@@ -865,9 +815,8 @@ class AmplifierCalculator {
             _texScroll(r'\mu=\mathbf{' + _texNum(mu) + r'}'),
             const Divider(),
 
-            // ===== μ' =====
             _text("4) Geometric Stability Factor (μ')", bold: true),
-            _texScroll(r"\mu'=\frac{1-|S_{22}|^2}{|S_{11}-\Delta S_{22}^*|+|S_{12}S_{21}|}"),
+            _texScroll(r"\mu^\prime=\frac{1-|S_{22}|^2}{|S_{11}-\Delta S_{22}^*|+|S_{12}S_{21}|}"),
             _text('Intermediate term (under current format):', bold: true),
             _texScroll(
               r'S_{11}-\Delta S_{22}^* = (' +
@@ -887,7 +836,7 @@ class AmplifierCalculator {
             _text('Substitution (only replace values, do not simplify):', bold: true),
             _texScroll(
               _latexSubstitutionMu(
-                symbol: r"\mu'",
+                symbol: r"\mu^\prime",
                 sPortAbs: s22Abs,
                 termAbs: term1MuPrime,
                 s12Abs: s12Abs,
@@ -895,14 +844,10 @@ class AmplifierCalculator {
               ),
             ),
             _text('Computed Result:', bold: true),
-            _texScroll(r"\mu'=\mathbf{" + _texNum(muPrime) + r"}"),
-            _text(
-              stableByMu ? "✓ Condition (C) satisfied: μ > 1 and μ' > 1" : "✗ Condition (C) not satisfied",
-              bold: true,
-            ),
+            _texScroll(r"\mu^\prime=\mathbf{" + _texNum(muPrime) + r"}"),
+            _text(stableByMu ? "✓ Condition (C) satisfied: μ > 1 and μ′ > 1" : "✗ Condition (C) not satisfied", bold: true),
 
             const SizedBox(height: 12),
-
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
@@ -935,9 +880,7 @@ class AmplifierCalculator {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          isUnconditionallyStable
-                              ? "At least one sufficient condition (A/B/C) is satisfied."
-                              : "None of (A/B/C) is satisfied. Use stability circles/regions.",
+                          isUnconditionallyStable ? "At least one sufficient condition (A/B/C) is satisfied." : "None of (A/B/C) is satisfied. Use stability circles/regions.",
                           style: TextStyle(
                             color: isUnconditionallyStable ? Colors.green[700] : Colors.deepOrange[700],
                             fontSize: 13,
@@ -962,13 +905,11 @@ class AmplifierCalculator {
 class ExamplePreset {
   final String name;
 
-  // scalar
   final String freqGHz;
   final String z0;
   final String zs;
   final String zl;
 
-  // S-params (mag/angle in DEG, matches polarDegree controllers)
   final String s11Mag, s11Ang;
   final String s12Mag, s12Ang;
   final String s21Mag, s21Ang;
@@ -1032,10 +973,36 @@ class _AmplifierHomePageState extends State<AmplifierHomePage> {
   bool isPotentiallyUnstableSource = false;
   bool isPotentiallyUnstableLoad = false;
 
-  // 与 AmplifierCalculator 同步的 eps（仅用于 UI 绘图保护）
   static const double _eps = 1e-12;
 
-  // ✅ UI 侧也支持 +/-∞（用于 k/kt 的额外判断）
+  Timer? _debounce;
+
+  void _scheduleAutoCalc() {
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 250), () {
+      if (_formKey.currentState?.validate() ?? false) {
+        calculate();
+      }
+    });
+  }
+
+  void _submitCalcNow() {
+    _debounce?.cancel();
+    FocusManager.instance.primaryFocus?.unfocus();
+    calculate();
+  }
+
+  Widget _tapBlankToCalc({required Widget child}) {
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onTap: () {
+        FocusManager.instance.primaryFocus?.unfocus();
+        calculate();
+      },
+      child: child,
+    );
+  }
+
   double _safeDivD(double num, double den) {
     if (num.isNaN || den.isNaN) return double.nan;
 
@@ -1225,8 +1192,7 @@ class _AmplifierHomePageState extends State<AmplifierHomePage> {
           c2.text = ComplexFormatter.smartFormat(c.imaginary, useScientific: false, precision: 6);
         } else {
           c1.text = ComplexFormatter.smartFormat(c.modulus, useScientific: false, precision: 6);
-          double angle =
-          (newFormat == ComplexInputFormat.polarDegree) ? c.phase() * 180 / pi : c.phase();
+          double angle = (newFormat == ComplexInputFormat.polarDegree) ? c.phase() * 180 / pi : c.phase();
           c2.text = ComplexFormatter.smartFormat(angle, useScientific: false, precision: 6);
         }
       }
@@ -1272,8 +1238,6 @@ class _AmplifierHomePageState extends State<AmplifierHomePage> {
     final stepPanels = amplifier.buildStepPanels(_currentFormat);
     _expandedList = List.generate(stepPanels.length, (_) => false);
 
-    // ✅ unilateral：步骤面板里已继续计算并显示 K/Kt/μ/μ'（允许 ±∞）
-    // UI 侧仍不画 stability circles/regions（它们对 unilateral 可能无意义/易崩）
     if (isUnilateral) {
       setState(() {
         _stepPanels = stepPanels;
@@ -1298,7 +1262,6 @@ class _AmplifierHomePageState extends State<AmplifierHomePage> {
 
     final delta = s11 * s22 - s12 * s21;
 
-    // ===== UI侧也用同一套“最终稳定”判定：A/B/C 任意满足即可视为无条件稳定 =====
     final double s11AbsVal = s11.modulus;
     final double s22AbsVal = s22.modulus;
     final double s12AbsVal = s12.modulus;
@@ -1309,8 +1272,7 @@ class _AmplifierHomePageState extends State<AmplifierHomePage> {
     final double deltaAbsVal = delta.modulus;
     final double deltaMagSq = deltaAbsVal * deltaAbsVal;
 
-    final double k =
-    _safeDivD(1.0 - s11MagSq - s22MagSq + deltaMagSq, 2.0 * s12AbsVal * s21AbsVal);
+    final double k = _safeDivD(1.0 - s11MagSq - s22MagSq + deltaMagSq, 2.0 * s12AbsVal * s21AbsVal);
     final double kt = _safeDivD(
       3.0 - 2.0 * s11MagSq - 2.0 * s22MagSq + deltaMagSq - (1.0 - deltaMagSq).abs(),
       4.0 * s12AbsVal * s21AbsVal,
@@ -1444,11 +1406,15 @@ class _AmplifierHomePageState extends State<AmplifierHomePage> {
     );
   }
 
-  Widget _buildScalarInput(TextEditingController controller, String label) {
+  Widget _buildScalarInput(TextEditingController controller, String label, {TextInputAction action = TextInputAction.next}) {
     return TextFormField(
       controller: controller,
       validator: commonValidator,
-      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+      keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true),
+      textInputAction: action,
+      onChanged: (_) => _scheduleAutoCalc(),
+      onFieldSubmitted: (_) => _submitCalcNow(),
+      onEditingComplete: _submitCalcNow,
       decoration: InputDecoration(
         labelText: label,
         border: const OutlineInputBorder(),
@@ -1468,227 +1434,266 @@ class _AmplifierHomePageState extends State<AmplifierHomePage> {
   }
 
   @override
+  void dispose() {
+    _debounce?.cancel();
+    freqController.dispose();
+    s11C1.dispose();
+    s11C2.dispose();
+    s12C1.dispose();
+    s12C2.dispose();
+    s21C1.dispose();
+    s21C2.dispose();
+    s22C1.dispose();
+    s22C2.dispose();
+    zsC.dispose();
+    zlC.dispose();
+    z0C.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final ex = _examples[_exampleIndex];
 
     return CommonScaffold(
       title: 'Amplifier Full Flow Calculator',
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // =================== Format Switch ===================
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: [
-                    _buildFormatBtn('Cartesian (a+bj)', ComplexInputFormat.cartesian),
-                    const SizedBox(width: 8),
-                    _buildFormatBtn('Polar (deg)', ComplexInputFormat.polarDegree),
-                    const SizedBox(width: 8),
-                    _buildFormatBtn('Polar (rad)', ComplexInputFormat.polarRadian),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 14),
-
-              // =================== Example Switch (ONE button) ===================
-              Card(
-                elevation: 0,
-                color: Colors.grey[50],
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
+      body: _tapBlankToCalc(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: Form(
+            key: _formKey,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // =================== Format Switch ===================
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
                   child: Row(
                     children: [
-                      Expanded(
-                        child: Text(
-                          'Current Example: ${ex.name}  (${_exampleIndex + 1}/${_examples.length})',
-                          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      ElevatedButton.icon(
-                        onPressed: _nextExampleAndRecalculate,
-                        icon: const Icon(Icons.loop),
-                        label: const Text('Next Example'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.deepPurple,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                        ),
-                      ),
+                      _buildFormatBtn('Cartesian (a+bj)', ComplexInputFormat.cartesian),
+                      const SizedBox(width: 8),
+                      _buildFormatBtn('Polar (deg)', ComplexInputFormat.polarDegree),
+                      const SizedBox(width: 8),
+                      _buildFormatBtn('Polar (rad)', ComplexInputFormat.polarRadian),
                     ],
                   ),
                 ),
-              ),
-              const SizedBox(height: 16),
+                const SizedBox(height: 14),
 
-              // =================== Inputs ===================
-              ComplexInputRow(
-                format: _currentFormat,
-                ctrl1: s11C1,
-                ctrl2: s11C2,
-                paramName: 'S11',
-                validator: commonValidator,
-              ),
-              ComplexInputRow(
-                format: _currentFormat,
-                ctrl1: s12C1,
-                ctrl2: s12C2,
-                paramName: 'S12',
-                validator: commonValidator,
-              ),
-              ComplexInputRow(
-                format: _currentFormat,
-                ctrl1: s21C1,
-                ctrl2: s21C2,
-                paramName: 'S21',
-                validator: commonValidator,
-              ),
-              ComplexInputRow(
-                format: _currentFormat,
-                ctrl1: s22C1,
-                ctrl2: s22C2,
-                paramName: 'S22',
-                validator: commonValidator,
-              ),
-
-              const SizedBox(height: 12),
-              const Divider(),
-              const SizedBox(height: 12),
-
-              Row(
-                children: [
-                  Expanded(child: _buildScalarInput(freqController, 'Freq (GHz)')),
-                  const SizedBox(width: 12),
-                  Expanded(child: _buildScalarInput(z0C, 'Z0 (Ω)')),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(child: _buildScalarInput(zsC, 'Zs (Source)')),
-                  const SizedBox(width: 12),
-                  Expanded(child: _buildScalarInput(zlC, 'Zl (Load)')),
-                ],
-              ),
-
-              const SizedBox(height: 20),
-              SizedBox(
-                width: double.infinity,
-                height: 48,
-                child: ElevatedButton.icon(
-                  onPressed: calculate,
-                  icon: const Icon(Icons.calculate),
-                  label: const Text('Calculate All Parameters', style: TextStyle(fontSize: 16)),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.deepPurple,
-                    foregroundColor: Colors.white,
+                // =================== Example Switch (ONE button) ===================
+                Card(
+                  elevation: 0,
+                  color: Colors.grey[50],
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            'Current Example: ${ex.name}  (${_exampleIndex + 1}/${_examples.length})',
+                            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        ElevatedButton.icon(
+                          onPressed: _nextExampleAndRecalculate,
+                          icon: const Icon(Icons.loop),
+                          label: const Text('Next Example'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.deepPurple,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              ),
+                const SizedBox(height: 16),
 
-              const SizedBox(height: 18),
-
-              // =================== Step Panels ===================
-              if (_stepPanels.isNotEmpty)
-                ExpansionPanelList(
-                  expansionCallback: (panelIndex, isExpanded) {
-                    setState(() {
-                      if (panelIndex >= 0 && panelIndex < _expandedList.length) {
-                        _expandedList[panelIndex] = !_expandedList[panelIndex];
-                      }
-                    });
-                  },
-                  children: _stepPanels.asMap().entries.map((entry) {
-                    final idx = entry.key;
-                    return ExpansionPanel(
-                      headerBuilder: (context, isExpanded) => ListTile(
-                        title: Text(
-                          entry.value.title,
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: isExpanded ? Colors.deepPurple : Colors.black87,
-                          ),
-                        ),
-                      ),
-                      body: Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: entry.value.content,
-                        ),
-                      ),
-                      isExpanded: (idx < _expandedList.length) ? _expandedList[idx] : false,
-                      canTapOnHeader: true,
-                    );
-                  }).toList(),
-                  elevation: 1,
+                ComplexInputRow(
+                  format: _currentFormat,
+                  ctrl1: s11C1,
+                  ctrl2: s11C2,
+                  paramName: 'S11',
+                  validator: commonValidator,
+                  onAnyChanged: _scheduleAutoCalc,
+                  onSubmit: _submitCalcNow,
+                  action1: TextInputAction.next,
+                  action2: TextInputAction.next,
+                ),
+                ComplexInputRow(
+                  format: _currentFormat,
+                  ctrl1: s12C1,
+                  ctrl2: s12C2,
+                  paramName: 'S12',
+                  validator: commonValidator,
+                  onAnyChanged: _scheduleAutoCalc,
+                  onSubmit: _submitCalcNow,
+                  action1: TextInputAction.next,
+                  action2: TextInputAction.next,
+                ),
+                ComplexInputRow(
+                  format: _currentFormat,
+                  ctrl1: s21C1,
+                  ctrl2: s21C2,
+                  paramName: 'S21',
+                  validator: commonValidator,
+                  onAnyChanged: _scheduleAutoCalc,
+                  onSubmit: _submitCalcNow,
+                  action1: TextInputAction.next,
+                  action2: TextInputAction.next,
+                ),
+                ComplexInputRow(
+                  format: _currentFormat,
+                  ctrl1: s22C1,
+                  ctrl2: s22C2,
+                  paramName: 'S22',
+                  validator: commonValidator,
+                  onAnyChanged: _scheduleAutoCalc,
+                  onSubmit: _submitCalcNow,
+                  action1: TextInputAction.next,
+                  action2: TextInputAction.done,
                 ),
 
-              // =================== Stability Regions ===================
-              if (_sourceRegionWidget != null || _loadRegionWidget != null) ...[
-                const SizedBox(height: 10),
-                ExpansionPanelList(
-                  expansionCallback: (panelIndex, isExpanded) {
-                    setState(() {
-                      if (panelIndex == 0) _sourceRegionExpanded = !_sourceRegionExpanded;
-                      if (panelIndex == 1) _loadRegionExpanded = !_loadRegionExpanded;
-                    });
-                  },
+                const SizedBox(height: 12),
+                const Divider(),
+                const SizedBox(height: 12),
+
+                Row(
                   children: [
-                    ExpansionPanel(
-                      headerBuilder: (context, isExpanded) => ListTile(
-                        leading: Icon(
-                          Icons.warning_amber_rounded,
-                          color: isPotentiallyUnstableSource ? Colors.orange : Colors.green,
-                        ),
-                        title: Text(
-                          'Source Stability Analysis',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: isPotentiallyUnstableSource ? Colors.deepOrange : Colors.black87,
-                          ),
-                        ),
-                      ),
-                      body: _sourceRegionExpanded && _sourceRegionWidget != null
-                          ? Padding(padding: const EdgeInsets.all(16), child: _sourceRegionWidget!)
-                          : const SizedBox.shrink(),
-                      isExpanded: _sourceRegionExpanded,
-                      canTapOnHeader: true,
-                    ),
-                    ExpansionPanel(
-                      headerBuilder: (context, isExpanded) => ListTile(
-                        leading: Icon(
-                          Icons.warning_amber_rounded,
-                          color: isPotentiallyUnstableLoad ? Colors.orange : Colors.green,
-                        ),
-                        title: Text(
-                          'Load Stability Analysis',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: isPotentiallyUnstableLoad ? Colors.deepOrange : Colors.black87,
-                          ),
-                        ),
-                      ),
-                      body: _loadRegionExpanded && _loadRegionWidget != null
-                          ? Padding(padding: const EdgeInsets.all(16), child: _loadRegionWidget!)
-                          : const SizedBox.shrink(),
-                      isExpanded: _loadRegionExpanded,
-                      canTapOnHeader: true,
-                    ),
+                    Expanded(child: _buildScalarInput(freqController, 'Freq (GHz)')),
+                    const SizedBox(width: 12),
+                    Expanded(child: _buildScalarInput(z0C, 'Z0 (Ω)')),
                   ],
                 ),
-              ],
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(child: _buildScalarInput(zsC, 'Zs (Source)')),
+                    const SizedBox(width: 12),
+                    Expanded(child: _buildScalarInput(zlC, 'Zl (Load)', action: TextInputAction.done)),
+                  ],
+                ),
 
-              const SizedBox(height: 40),
-            ],
+                const SizedBox(height: 20),
+                SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: ElevatedButton.icon(
+                    onPressed: calculate,
+                    icon: const Icon(Icons.calculate),
+                    label: const Text('Calculate All Parameters', style: TextStyle(fontSize: 16)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.deepPurple,
+                      foregroundColor: Colors.white,
+                    ),
+                  ),
+                ),
+
+                const SizedBox(height: 18),
+
+                // =================== Step Panels ===================
+                if (_stepPanels.isNotEmpty)
+                  ExpansionPanelList(
+                    expansionCallback: (panelIndex, isExpanded) {
+                      setState(() {
+                        if (panelIndex >= 0 && panelIndex < _expandedList.length) {
+                          _expandedList[panelIndex] = !_expandedList[panelIndex];
+                        }
+                      });
+                    },
+                    children: _stepPanels.asMap().entries.map((entry) {
+                      final idx = entry.key;
+                      return ExpansionPanel(
+                        headerBuilder: (context, isExpanded) => ListTile(
+                          title: SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: Math.tex(
+                              entry.value.titleLatex,
+                              textStyle: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: isExpanded ? Colors.deepPurple : Colors.black87,
+                              ),
+                            ),
+                          ),
+                        ),
+                        body: Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: entry.value.content,
+                          ),
+                        ),
+                        isExpanded: (idx < _expandedList.length) ? _expandedList[idx] : false,
+                        canTapOnHeader: true,
+                      );
+                    }).toList(),
+                    elevation: 1,
+                  ),
+
+                // =================== Stability Regions ===================
+                if (_sourceRegionWidget != null || _loadRegionWidget != null) ...[
+                  const SizedBox(height: 10),
+                  ExpansionPanelList(
+                    expansionCallback: (panelIndex, isExpanded) {
+                      setState(() {
+                        if (panelIndex == 0) _sourceRegionExpanded = !_sourceRegionExpanded;
+                        if (panelIndex == 1) _loadRegionExpanded = !_loadRegionExpanded;
+                      });
+                    },
+                    children: [
+                      ExpansionPanel(
+                        headerBuilder: (context, isExpanded) => ListTile(
+                          leading: Icon(
+                            Icons.warning_amber_rounded,
+                            color: isPotentiallyUnstableSource ? Colors.orange : Colors.green,
+                          ),
+                          title: Text(
+                            'Source Stability Analysis',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: isPotentiallyUnstableSource ? Colors.deepOrange : Colors.black87,
+                            ),
+                          ),
+                        ),
+                        body: _sourceRegionExpanded && _sourceRegionWidget != null
+                            ? Padding(padding: const EdgeInsets.all(16), child: _sourceRegionWidget!)
+                            : const SizedBox.shrink(),
+                        isExpanded: _sourceRegionExpanded,
+                        canTapOnHeader: true,
+                      ),
+                      ExpansionPanel(
+                        headerBuilder: (context, isExpanded) => ListTile(
+                          leading: Icon(
+                            Icons.warning_amber_rounded,
+                            color: isPotentiallyUnstableLoad ? Colors.orange : Colors.green,
+                          ),
+                          title: Text(
+                            'Load Stability Analysis',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: isPotentiallyUnstableLoad ? Colors.deepOrange : Colors.black87,
+                            ),
+                          ),
+                        ),
+                        body: _loadRegionExpanded && _loadRegionWidget != null
+                            ? Padding(padding: const EdgeInsets.all(16), child: _loadRegionWidget!)
+                            : const SizedBox.shrink(),
+                        isExpanded: _loadRegionExpanded,
+                        canTapOnHeader: true,
+                      ),
+                    ],
+                  ),
+                ],
+
+                const SizedBox(height: 40),
+              ],
+            ),
           ),
         ),
       ),

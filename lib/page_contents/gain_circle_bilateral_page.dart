@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:equations/equations.dart';
@@ -8,18 +9,14 @@ import '../input_and_output_functions/utils.dart';
 import '../functional_components/fixed_input.dart';
 import '../smith_chart_db_module/smith_gain_circle_painter.dart';
 
-// ==========================================
 // Simple data structure: Step panels
-// ==========================================
 class StepPanel {
   final String title;
   final List<Widget> content;
   StepPanel({required this.title, required this.content});
 }
 
-// ==========================================
 // Example data structure
-// ==========================================
 class GainCircleExample {
   final String name;
 
@@ -52,9 +49,7 @@ class GainCircleExample {
   Complex get S22 => Complex.fromPolar(r: s22Mag, theta: s22AngDeg * pi / 180.0);
 }
 
-// ==========================================
-// Teaching cases (A/B/C)
-// ==========================================
+// Cases (A/B/C)
 enum BilateralCase { a, b, c }
 
 class CaseInfo {
@@ -82,6 +77,9 @@ class GainCircleBilateralPage extends StatefulWidget {
 
 class _GainCircleBilateralPageState extends State<GainCircleBilateralPage> {
   final _formKey = GlobalKey<FormState>();
+
+  // 防抖计时器
+  Timer? _debounceTimer;
 
   ComplexInputFormat _currentFormat = ComplexInputFormat.polarDegree;
 
@@ -215,6 +213,7 @@ class _GainCircleBilateralPageState extends State<GainCircleBilateralPage> {
 
   @override
   void dispose() {
+    _debounceTimer?.cancel(); // 清除 Timer
     s11C1.dispose();
     s11C2.dispose();
     s12C1.dispose();
@@ -228,9 +227,15 @@ class _GainCircleBilateralPageState extends State<GainCircleBilateralPage> {
     super.dispose();
   }
 
-  // ==========================================
-  // Helpers: Join & parse complex input
-  // ==========================================
+  void _onInputChanged() {
+    if (_debounceTimer?.isActive ?? false) _debounceTimer!.cancel();
+    _debounceTimer = Timer(const Duration(milliseconds: 500), () {
+      if (_formKey.currentState?.validate() ?? false) {
+        _onCalculatePressed();
+      }
+    });
+  }
+
   String _joinInput(TextEditingController c1, TextEditingController c2) {
     String a = c1.text.trim();
     String b = c2.text.trim();
@@ -262,9 +267,6 @@ class _GainCircleBilateralPageState extends State<GainCircleBilateralPage> {
     c2.text = ComplexFormatter.smartFormat(angle, useScientific: false, precision: 6);
   }
 
-  // ==========================================
-  // Example cycle (NO SnackBar)
-  // ==========================================
   void _applyExample(GainCircleExample ex, {required bool autoCalculate}) {
     setState(() {
       _setComplexControllers(s11C1, s11C2, ex.S11);
@@ -294,9 +296,7 @@ class _GainCircleBilateralPageState extends State<GainCircleBilateralPage> {
     _applyExample(_examples[_exampleIndex], autoCalculate: true);
   }
 
-  // ==========================================
   // Format switching
-  // ==========================================
   void switchAllFormat(ComplexInputFormat newFormat) {
     if (newFormat == _currentFormat) return;
 
@@ -323,9 +323,6 @@ class _GainCircleBilateralPageState extends State<GainCircleBilateralPage> {
     });
   }
 
-  // ==========================================
-  // UI helpers
-  // ==========================================
   String _texNumSafe(double val) {
     if (val.isNaN) return r'\text{undefined}';
     if (val.isInfinite) return val.isNegative ? r'-\infty' : r'\infty';
@@ -373,11 +370,21 @@ class _GainCircleBilateralPageState extends State<GainCircleBilateralPage> {
     );
   }
 
-  Widget _buildScalarInput(TextEditingController controller, String label, {String? Function(String?)? validator}) {
+  Widget _buildScalarInput(
+      TextEditingController controller,
+      String label, {
+        String? Function(String?)? validator,
+        VoidCallback? onAnyChanged,
+        VoidCallback? onSubmit,
+        TextInputAction action = TextInputAction.next,
+      }) {
     return TextFormField(
       controller: controller,
       validator: validator,
       keyboardType: const TextInputType.numberWithOptions(decimal: true),
+      textInputAction: action,
+      onChanged: (_) => onAnyChanged?.call(),
+      onFieldSubmitted: (_) => onSubmit?.call(),
       decoration: InputDecoration(
         labelText: label,
         border: const OutlineInputBorder(),
@@ -436,9 +443,61 @@ class _GainCircleBilateralPageState extends State<GainCircleBilateralPage> {
     );
   }
 
-  // ===============================================
-  // Core helpers for +/-Infinity judgement
-  // ===============================================
+  String _escapeLatexText(String s) {
+    return s
+        .replaceAll(r'\', r'\\')
+        .replaceAll('{', r'\{')
+        .replaceAll('}', r'\}')
+        .replaceAll('_', r'\_')
+        .replaceAll('^', r'\^{}')
+        .replaceAll('#', r'\#')
+        .replaceAll('%', r'\%')
+        .replaceAll('&', r'\&')
+        .replaceAll(r'$', r'\$');
+  }
+
+  String? _panelTitleLatex(String title) {
+    if (title.startsWith('0.')) {
+      return r'\mathbf{0.}\ \text{Case Selection (A / B / C)}';
+    }
+    if (title.startsWith('1.')) {
+      return r'\mathbf{1.}\ \text{Stability}\ (\Delta,\ K,\ K_t,\ \mu,\ \mu^\prime)';
+    }
+    if (title.startsWith('2.')) {
+      final rest = title.substring(2).trim();
+      return r'\mathbf{2.}\ \text{' + _escapeLatexText(rest) + r'}';
+    }
+    if (title.startsWith('3.')) {
+      final rest = title.substring(2).trim();
+      return r'\mathbf{3.}\ \text{' + _escapeLatexText(rest) + r'}';
+    }
+    if (title.startsWith('4.')) {
+      return r'\mathbf{4.}\ \text{Simultaneous Conjugate Match}\ (\Gamma_{Ms},\ \Gamma_{ML})\ \text{— Case-based}';
+    }
+    return null;
+  }
+
+  Widget _panelHeaderTitle(String title, {required Color color}) {
+    final latex = _panelTitleLatex(title);
+    if (latex == null) {
+      return Text(
+        title,
+        style: TextStyle(fontWeight: FontWeight.bold, color: color),
+      );
+    }
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Math.tex(
+        latex,
+        textStyle: TextStyle(
+          fontSize: 16,
+          fontWeight: FontWeight.bold,
+          color: color,
+        ),
+      ),
+    );
+  }
+
   double _safeDivideToInfinity(double numerator, double denominatorAbs) {
     if (denominatorAbs < _eps) {
       if (numerator.abs() < _eps) return double.nan; // 0/0 -> undefined
@@ -453,57 +512,51 @@ class _GainCircleBilateralPageState extends State<GainCircleBilateralPage> {
     return '$name: denominator≈0 → ${numerator > 0 ? "+∞" : "-∞"} (sign decided by numerator).';
   }
 
-  // ===============================================
-  // Teaching: choose A/B/C based on computed K & |Δ|
-  // ===============================================
+  // choose A/B/C based on computed K & |Δ|
   CaseInfo _decideCase({required double K, required double deltaAbs, required bool stableKDelta}) {
     // Case A: unconditionally stable (classic)
     if (stableKDelta) {
       return const CaseInfo(
         which: BilateralCase.a,
         title: 'Case A (Unconditionally Stable)',
-        rule: 'K > 1 AND |Δ| < 1',
-        maxGainRule: 'Use MAG (maximum available gain): MAG = MSG · (K - √(K²-1))',
-        conjMatchRule: 'Simultaneous conjugate match is achievable; choose minus sign: ΓS = ΓMs−, ΓL = ΓML−',
+        rule: r'K > 1 \quad \text{and} \quad |\Delta| < 1',
+        maxGainRule: r'\text{Use MAG: } MAG = MSG \cdot \left(K - \sqrt{K^2-1}\right)',
+        conjMatchRule: r'\text{Use minus sign: } \Gamma_S = \Gamma_{Ms-},\; \Gamma_L = \Gamma_{ML-}',
       );
     }
 
-    // Case C: special teaching branch when K ≤ 1 (your requirement)
+    // Case C: special teaching branch when K ≤ 1
     if (K.isNaN || (K.isFinite && K <= 1)) {
       return const CaseInfo(
         which: BilateralCase.c,
         title: 'Case C (K ≤ 1)',
-        rule: 'K ≤ 1 (special case; simultaneous conjugate match NOT guaranteed)',
-        maxGainRule: 'No MAG. Use MSG = |S21|/|S12| as a reference (max stable gain concept not guaranteed here).',
-        conjMatchRule: 'Compute ΓMs±, ΓML± anyway for teaching; prefer passive solutions (|Γ|<1) if available.',
+        rule: r'K \le 1 \quad (\text{Not unconditionally stable})',
+        maxGainRule: r'\text{No MAG. Use MSG reference: } MSG = \frac{|S_{21}|}{|S_{12}|}',
+        conjMatchRule: r'\text{Match not guaranteed. Prefer passive } |\Gamma|<1 \text{ if exists.}',
       );
     }
 
-    // Case B: potentially unstable with K>1 but |Δ|>1 (your doc note)
-    // (K>1 & |Δ|>1) -> choose plus sign for ΓMs/ΓML; gain not maximum yet.
+    // Case B: potentially unstable with K>1 but |Δ|>1
     if (K.isFinite && K > 1 && deltaAbs > 1) {
       return const CaseInfo(
         which: BilateralCase.b,
         title: 'Case B (Potentially Unstable)',
-        rule: 'K > 1 AND |Δ| > 1',
-        maxGainRule: 'Do NOT claim MAG. Report MSG = |S21|/|S12|; MAG is not guaranteed.',
-        conjMatchRule: 'Use plus sign per note: ΓS = ΓMs+, ΓL = ΓML+ (gain not maximum yet).',
+        rule: r'K > 1 \quad \text{and} \quad |\Delta| > 1',
+        maxGainRule: r'\text{No MAG. Use MSG: } MSG = \frac{|S_{21}|}{|S_{12}|}',
+        conjMatchRule: r'\text{Use plus sign (per note): } \Gamma_S = \Gamma_{Ms+},\; \Gamma_L = \Gamma_{ML+}',
       );
     }
 
-    // Default fallback (treat as C-style teaching behavior)
+    // Default fallback
     return const CaseInfo(
       which: BilateralCase.c,
       title: 'Case C (Fallback)',
-      rule: 'Not Case A; treat as non-guaranteed region for teaching output',
-      maxGainRule: 'Use MSG reference; do not claim MAG.',
-      conjMatchRule: 'Compute ΓMs±, ΓML± and prefer passive solutions if available.',
+      rule: r'\text{Unknown condition}',
+      maxGainRule: r'\text{Use MSG reference}',
+      conjMatchRule: r'\text{Prefer passive solutions}',
     );
   }
 
-  // ===============================================
-  // Complex sqrt for real discriminant (can be negative)
-  // ===============================================
   Complex _sqrtRealAsComplex(double x) {
     if (x.isNaN) return const Complex(double.nan, double.nan);
     if (x.isInfinite) return Complex(x.isNegative ? 0 : double.infinity, 0);
@@ -523,18 +576,14 @@ class _GainCircleBilateralPageState extends State<GainCircleBilateralPage> {
     if (mOk && !pOk) return minus;
     if (!mOk && pOk) return plus;
     if (mOk && pOk) {
-      // both passive: choose closer to origin
       return (minus!.modulus <= plus!.modulus) ? minus : plus;
     }
-    // none passive: choose the one with smaller modulus (teaching: "less active")
     if (minus == null) return plus;
     if (plus == null) return minus;
     return (minus.modulus <= plus.modulus) ? minus : plus;
   }
 
-  // ===============================================
   // Core calculation
-  // ===============================================
   void _onCalculatePressed() {
     if (!_formKey.currentState!.validate()) return;
 
@@ -557,7 +606,6 @@ class _GainCircleBilateralPageState extends State<GainCircleBilateralPage> {
         final S21abs = S21.modulus, S21abs2 = S21abs * S21abs;
         final S22abs = S22.modulus, S22abs2 = S22abs * S22abs;
 
-        // Keep S21≈0 as a true hard error (no gain device)
         if (S21abs < _eps) {
           _stepPanels.add(StepPanel(
             title: "Calculation Error",
@@ -582,7 +630,6 @@ class _GainCircleBilateralPageState extends State<GainCircleBilateralPage> {
         final K = _safeDivideToInfinity(numK, denomKAbs);
 
         // 3) Kt (allow S12=0)
-        // Kt = [ 3 -2|S11|^2 -2|S22|^2 + |Δ|^2 - |1-Δ|^2 ] / [ 4|S12 S21| ]
         final oneMinusDelta = Complex(1, 0) - delta;
         final oneMinusDeltaAbs2 = pow(oneMinusDelta.modulus, 2).toDouble();
         final numKt = 3 - 2 * S11abs2 - 2 * S22abs2 + deltaAbs2 - oneMinusDeltaAbs2;
@@ -590,8 +637,8 @@ class _GainCircleBilateralPageState extends State<GainCircleBilateralPage> {
         final Kt = _safeDivideToInfinity(numKt, denomKtAbs);
 
         // 4) mu and mu'
-        final C2 = S22 - delta * S11.conjugate(); // C2 = S22 - Δ S11*
-        final C1 = S11 - delta * S22.conjugate(); // C1 = S11 - Δ S22*
+        final C2 = S22 - delta * S11.conjugate();
+        final C1 = S11 - delta * S22.conjugate();
         final absS12S21 = (S12abs * S21abs);
 
         final denomMu = C2.modulus + absS12S21;
@@ -600,42 +647,78 @@ class _GainCircleBilateralPageState extends State<GainCircleBilateralPage> {
         final mu = (denomMu < _eps) ? double.nan : (1 - S11abs2) / denomMu;
         final muP = (denomMuP < _eps) ? double.nan : (1 - S22abs2) / denomMuP;
 
-        // 5) Stability decisions (do NOT remove old K&Δ criterion)
+        // 5) Stability decisions
         final stableKDelta = (!K.isNaN) && (K.isInfinite ? (!K.isNegative) : (K > 1)) && (deltaAbs < 1);
         final stableKt = (!Kt.isNaN) && (Kt.isInfinite ? (!Kt.isNegative) : (Kt > 1));
         final stableMu = (!mu.isNaN) && (mu > 1);
         final stableMuP = (!muP.isNaN) && (muP > 1);
 
-        // keep your original definition as primary (K & Δ),
-        // but we also show Kt / mu / mu' as additional criteria
         _isUnconditionallyStable = stableKDelta;
 
-        // =======================
-        // Decide A/B/C teaching case
-        // =======================
         _caseInfo = _decideCase(K: K, deltaAbs: deltaAbs, stableKDelta: stableKDelta);
         _case = _caseInfo.which;
 
-        // ---------- Panel: Case explanation (must be explicit) ----------
         _stepPanels.add(
           StepPanel(
             title: '0. Case Selection (A / B / C)',
             content: [
               _text('We classify the device into three teaching cases:', bold: true),
-              _text('• Case A: K > 1 AND |Δ| < 1  → Unconditionally stable.'),
-              _text('• Case B: K > 1 AND |Δ| > 1  → Potentially unstable; note says use plus sign; gain not maximum yet.'),
-              _text('• Case C: K ≤ 1              → Special case; conjugate match not guaranteed, still compute for teaching.'),
+
+              // 使用 LaTeX 渲染分类标准
+              _texScroll(r'\bullet\ \text{Case A: } K > 1 \text{ and } |\Delta| < 1 \to \text{Unconditionally stable}'),
+              _texScroll(r'\bullet\ \text{Case B: } K > 1 \text{ and } |\Delta| > 1 \to \text{Potentially unstable}'),
+              _texScroll(r'\bullet\ \text{Case C: } K \le 1 \to \text{Potentially unstable}'),
+
               const Divider(),
-              _text('Chosen case:', bold: true),
-              _text('${_caseInfo.title}'),
-              _text('Rule: ${_caseInfo.rule}'),
-              _text('Max gain rule: ${_caseInfo.maxGainRule}'),
-              _text('Conjugate match rule: ${_caseInfo.conjMatchRule}'),
+
+              _text('Chosen Case Analysis:', bold: true),
+
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.blue[50],
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.blue.shade200),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                        _caseInfo.title,
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.blueAccent)
+                    ),
+                    const SizedBox(height: 8),
+
+                    const Text("Condition:", style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Colors.black54)),
+                    // 渲染 rule
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Math.tex(_caseInfo.rule, textStyle: const TextStyle(fontSize: 15, color: Colors.black87)),
+                    ),
+                    const SizedBox(height: 8),
+
+                    const Text("Max Gain Strategy:", style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Colors.black54)),
+                    // 渲染 maxGainRule
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Math.tex(_caseInfo.maxGainRule, textStyle: const TextStyle(fontSize: 15, color: Colors.black87)),
+                    ),
+                    const SizedBox(height: 8),
+
+                    const Text("Conjugate Match Strategy:", style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Colors.black54)),
+                    // 渲染 conjMatchRule
+                    SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Math.tex(_caseInfo.conjMatchRule, textStyle: const TextStyle(fontSize: 15, color: Colors.black87)),
+                    ),
+                  ],
+                ),
+              ),
             ],
           ),
         );
 
-        // ---------- Panel: Stability (Δ, K, Kt, μ, μ′) ----------
         _stepPanels.add(
           StepPanel(
             title: '1. Stability (Δ, K, Kt, μ, μ′)',
@@ -650,8 +733,6 @@ class _GainCircleBilateralPageState extends State<GainCircleBilateralPage> {
               _texScroll(
                   r"\mu' = \frac{1-|S_{22}|^2}{|S_{11}-\Delta S_{22}^*|+|S_{12}S_{21}|}"),
               const Divider(),
-
-              // --- substitution (insert values; not simplified) ---
               _text('Substitution (insert values; not simplified):', bold: true),
               _texScroll(
                 r'S_{11}=' + ComplexFormatter.latex(S11, _currentFormat, precision: 3) +
@@ -693,7 +774,6 @@ class _GainCircleBilateralPageState extends State<GainCircleBilateralPage> {
                     + _texNumSafe(absS12S21) + r"}",
               ),
               const Divider(),
-
               _text('Substitution & Results:', bold: true),
               _texScroll(r'|\Delta| = ' + _texNumSafe(deltaAbs)),
               _texScroll(r'K = ' + _texNumSafe(K)),
@@ -744,15 +824,9 @@ class _GainCircleBilateralPageState extends State<GainCircleBilateralPage> {
           ),
         );
 
-        // ===============================================
-        // 2) MAG / MSG (+ handle S12=0)
-        // (Your existing computation stays; we only route which one is "claimed"
-        //  by case, and add substitution lines.)
-        // ===============================================
         double? magLin, magDb;
         double? msgLin, msgDb;
 
-        // MSG definition: |S21|/|S12| (goes to +∞ when S12=0 and |S21|>0)
         if (S12abs < _eps) {
           msgLin = double.infinity;
           msgDb = double.infinity;
@@ -762,10 +836,6 @@ class _GainCircleBilateralPageState extends State<GainCircleBilateralPage> {
         }
 
         if (_case == BilateralCase.a) {
-          // Case A: claim MAG.
-          // If S12≈0, bilateral MAG formula becomes indeterminate (∞×0).
-          // Use unilateral GTUmax commonly used when S12=0:
-          // GTUmax = |S21|^2 / [(1-|S11|^2)(1-|S22|^2)]
           if (S12abs < _eps) {
             final den = (1 - S11abs2) * (1 - S22abs2);
             if (den.abs() < _eps) {
@@ -798,7 +868,6 @@ class _GainCircleBilateralPageState extends State<GainCircleBilateralPage> {
               ),
             );
           } else {
-            // classic bilateral MAG
             final term = (K - sqrt(K * K - 1));
             magLin = msgLin! * term;
             magDb = (magLin! <= 1e-12) ? -999.0 : 10 * log(magLin!) / ln10;
@@ -832,7 +901,6 @@ class _GainCircleBilateralPageState extends State<GainCircleBilateralPage> {
             );
           }
         } else if (_case == BilateralCase.b) {
-          // Case B: do NOT claim MAG; show MSG and note.
           _stepPanels.add(
             StepPanel(
               title: '2. Maximum Gain (Case B → use MSG; do NOT claim MAG)',
@@ -851,7 +919,6 @@ class _GainCircleBilateralPageState extends State<GainCircleBilateralPage> {
             ),
           );
         } else {
-          // Case C: K<=1 -> also do not claim MAG; show MSG reference.
           _stepPanels.add(
             StepPanel(
               title: '2. Maximum Gain (Case C → K≤1, use MSG reference)',
@@ -871,9 +938,6 @@ class _GainCircleBilateralPageState extends State<GainCircleBilateralPage> {
           );
         }
 
-        // ===============================================
-        // 3) Gain circles (unchanged)
-        // ===============================================
         final dbList = gainDbListC.text
             .split(',')
             .map((e) => double.tryParse(e.trim()))
@@ -926,8 +990,10 @@ class _GainCircleBilateralPageState extends State<GainCircleBilateralPage> {
         for (int i = 0; i < dbList.length; i++) {
           final currentGpDB = dbList[i];
 
-          // If we have a MAG value (Case A) and user asks above it, warn & skip (only meaningful when MAG is finite)
           if (_case == BilateralCase.a && magDb != null && magDb!.isFinite && currentGpDB > magDb!) {
+            final magDbStr = ComplexFormatter.smartFormat(magDb!, precision: 3);
+            final targetStr = ComplexFormatter.smartFormat(currentGpDB, precision: 3);
+
             circleWidgets.add(
               Container(
                 margin: const EdgeInsets.only(bottom: 8),
@@ -938,7 +1004,7 @@ class _GainCircleBilateralPageState extends State<GainCircleBilateralPage> {
                   border: Border.all(color: Colors.red.shade200),
                 ),
                 child: Text(
-                  '⚠️ Target gain ($currentGpDB dB) > MAG. Circle not physically realizable (Active Load).',
+                  '⚠️ Target gain ($targetStr dB) > MAG ($magDbStr dB). Circle not physically realizable (Active Load).',
                   style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
                 ),
               ),
@@ -954,7 +1020,6 @@ class _GainCircleBilateralPageState extends State<GainCircleBilateralPage> {
 
           final Cp = C2.conjugate() * Complex(gp, 0) / Complex(denominatorCp, 0);
 
-          // robust discriminant term
           final numeratorRp = 1 - (numK) * gp + (absS12S21_sq) * gp * gp;
 
           if (numeratorRp < 0) {
@@ -1044,10 +1109,6 @@ class _GainCircleBilateralPageState extends State<GainCircleBilateralPage> {
           ),
         );
 
-        // ===============================================
-        // 4) ΓMs, ΓML (Case-based sign choice + ALWAYS compute, even when discriminant<0)
-        // + MUST show substitution "insert values; not simplified"
-        // ===============================================
         final B1 = 1 + S11abs2 - S22abs2 - deltaAbs2;
         final B2 = 1 + S22abs2 - S11abs2 - deltaAbs2;
 
@@ -1066,30 +1127,24 @@ class _GainCircleBilateralPageState extends State<GainCircleBilateralPage> {
         Complex? GmsMinus, GmsPlus, GmlMinus, GmlPlus;
 
         if (twoC1.modulus > _eps) {
-          // ΓMs± = (B1 ± sqrt(...)) / (2C1)
           GmsMinus = (Complex(B1, 0) - sqrtDisc1) / twoC1;
           GmsPlus = (Complex(B1, 0) + sqrtDisc1) / twoC1;
         }
         if (twoC2.modulus > _eps) {
-          // ΓML± = (B2 ± sqrt(...)) / (2C2)
           GmlMinus = (Complex(B2, 0) - sqrtDisc2) / twoC2;
           GmlPlus = (Complex(B2, 0) + sqrtDisc2) / twoC2;
         }
 
-        // Choose ΓS, ΓL by case rule
         Complex? chosenGs;
         Complex? chosenGl;
 
         if (_case == BilateralCase.a) {
-          // Case A: must use minus sign
           chosenGs = GmsMinus;
           chosenGl = GmlMinus;
         } else if (_case == BilateralCase.b) {
-          // Case B: per note: choose plus sign (but do not claim maximum gain)
           chosenGs = GmsPlus;
           chosenGl = GmlPlus;
         } else {
-          // Case C: prefer passive solutions (|Γ|<1) if possible
           chosenGs = _choosePassivePrefer(GmsMinus, GmsPlus);
           chosenGl = _choosePassivePrefer(GmlMinus, GmlPlus);
         }
@@ -1108,8 +1163,6 @@ class _GainCircleBilateralPageState extends State<GainCircleBilateralPage> {
               _texScroll(r'C_1 = S_{11} - \Delta S_{22}^*'),
               _texScroll(r'C_2 = S_{22} - \Delta S_{11}^*'),
               const Divider(),
-
-              // --- substitution (insert values; not simplified) ---
               _text('Substitution (insert values; not simplified):', bold: true),
               _texScroll(
                 r'B_1 = 1 + |S_{11}|^2 - |S_{22}|^2 - |\Delta|^2'
@@ -1138,14 +1191,12 @@ class _GainCircleBilateralPageState extends State<GainCircleBilateralPage> {
                 r'B_2^2 - 4|C_2|^2 = (' + _texNumSafe(B2) + r')^2 - 4\cdot(' + _texNumSafe(C2.modulus) + r')^2 = ' + _texNumSafe(discrim2),
               ),
               const Divider(),
-
               _text('Computed Solutions (show both ±):', bold: true),
               if (GmsMinus != null) _texScroll(r'\Gamma_{Ms-} = ' + ComplexFormatter.latex(GmsMinus, _currentFormat, precision: 3)),
               if (GmsPlus != null) _texScroll(r'\Gamma_{Ms+} = ' + ComplexFormatter.latex(GmsPlus, _currentFormat, precision: 3)),
               if (GmlMinus != null) _texScroll(r'\Gamma_{ML-} = ' + ComplexFormatter.latex(GmlMinus, _currentFormat, precision: 3)),
               if (GmlPlus != null) _texScroll(r'\Gamma_{ML+} = ' + ComplexFormatter.latex(GmlPlus, _currentFormat, precision: 3)),
               const Divider(),
-
               _text('Chosen (ΓS, ΓL) by case:', bold: true),
               _text('Case rule: ${_caseInfo.conjMatchRule}'),
               if (chosenGs != null)
@@ -1156,7 +1207,6 @@ class _GainCircleBilateralPageState extends State<GainCircleBilateralPage> {
                 _texScroll(r'\Gamma_L = ' + ComplexFormatter.latex(chosenGl, _currentFormat, precision: 3))
               else
                 _text('ΓL not available (2C2≈0).'),
-
               const Divider(),
               if (_case == BilateralCase.c)
                 _text(
@@ -1234,9 +1284,6 @@ class _GainCircleBilateralPageState extends State<GainCircleBilateralPage> {
     );
   }
 
-  // ==========================================
-  // Build
-  // ==========================================
   @override
   Widget build(BuildContext context) {
     return CommonScaffold(
@@ -1303,19 +1350,70 @@ class _GainCircleBilateralPageState extends State<GainCircleBilateralPage> {
               ),
               const SizedBox(height: 16),
 
-              // Inputs
-              ComplexInputRow(format: _currentFormat, ctrl1: s11C1, ctrl2: s11C2, paramName: 'S11', validator: commonValidator),
-              ComplexInputRow(format: _currentFormat, ctrl1: s12C1, ctrl2: s12C2, paramName: 'S12', validator: commonValidator),
-              ComplexInputRow(format: _currentFormat, ctrl1: s21C1, ctrl2: s21C2, paramName: 'S21', validator: commonValidator),
-              ComplexInputRow(format: _currentFormat, ctrl1: s22C1, ctrl2: s22C2, paramName: 'S22', validator: commonValidator),
+              // Inputs with smooth Keyboard Action flow (Next -> Next -> ... -> Done)
+              ComplexInputRow(
+                format: _currentFormat,
+                ctrl1: s11C1,
+                ctrl2: s11C2,
+                paramName: 'S11',
+                validator: commonValidator,
+                onAnyChanged: _onInputChanged,
+                onSubmit: _onCalculatePressed,
+                action1: TextInputAction.next,
+                action2: TextInputAction.next,
+              ),
+              ComplexInputRow(
+                format: _currentFormat,
+                ctrl1: s12C1,
+                ctrl2: s12C2,
+                paramName: 'S12',
+                validator: commonValidator,
+                onAnyChanged: _onInputChanged,
+                onSubmit: _onCalculatePressed,
+                action1: TextInputAction.next,
+                action2: TextInputAction.next,
+              ),
+              ComplexInputRow(
+                format: _currentFormat,
+                ctrl1: s21C1,
+                ctrl2: s21C2,
+                paramName: 'S21',
+                validator: commonValidator,
+                onAnyChanged: _onInputChanged,
+                onSubmit: _onCalculatePressed,
+                action1: TextInputAction.next,
+                action2: TextInputAction.next,
+              ),
+              ComplexInputRow(
+                format: _currentFormat,
+                ctrl1: s22C1,
+                ctrl2: s22C2,
+                paramName: 'S22',
+                validator: commonValidator,
+                onAnyChanged: _onInputChanged,
+                onSubmit: _onCalculatePressed,
+                action1: TextInputAction.next,
+                action2: TextInputAction.next,
+              ),
 
               const SizedBox(height: 12),
-              _buildScalarInput(z0C, 'Z0 (Ohm)', validator: commonValidator),
+              _buildScalarInput(
+                z0C,
+                'Z0 (Ohm)',
+                validator: commonValidator,
+                onAnyChanged: _onInputChanged,
+                onSubmit: _onCalculatePressed,
+                action: TextInputAction.next,
+              ),
 
               const SizedBox(height: 12),
               TextFormField(
                 controller: gainDbListC,
                 validator: (val) => (val == null || val.isEmpty) ? 'Required' : null,
+                // Last field: Action is Done
+                textInputAction: TextInputAction.done,
+                onChanged: (_) => _onInputChanged(),
+                onFieldSubmitted: (_) => _onCalculatePressed(),
                 decoration: const InputDecoration(
                   labelText: 'Target Gains (dB, comma separated)',
                   border: OutlineInputBorder(),
@@ -1388,15 +1486,13 @@ class _GainCircleBilateralPageState extends State<GainCircleBilateralPage> {
                   },
                   children: _stepPanels.asMap().entries.map((entry) {
                     final isErrorPanel = entry.value.title == "Calculation Error";
+                    final headerColor = isErrorPanel
+                        ? Colors.red
+                        : (entry.key < _expandedList.length && _expandedList[entry.key] ? Colors.deepPurple : Colors.black87);
+
                     return ExpansionPanel(
                       headerBuilder: (context, isExpanded) => ListTile(
-                        title: Text(
-                          entry.value.title,
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: isErrorPanel ? Colors.red : (isExpanded ? Colors.deepPurple : Colors.black87),
-                          ),
-                        ),
+                        title: _panelHeaderTitle(entry.value.title, color: headerColor),
                       ),
                       body: Container(
                         width: double.infinity,

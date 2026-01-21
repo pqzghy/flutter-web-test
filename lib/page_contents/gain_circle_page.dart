@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_math_fork/flutter_math.dart';
@@ -8,9 +9,6 @@ import '../input_and_output_functions/utils.dart';
 import '../functional_components/fixed_input.dart';
 import '../smith_chart_db_module/smith_gain_circle_painter.dart';
 
-// ==========================================
-// 示例数据结构
-// ==========================================
 class GainCircleExamplePreset {
   final String name;
 
@@ -36,9 +34,6 @@ class GainCircleExamplePreset {
   });
 }
 
-// ==========================================
-// 主页面：单向增益圆计算器
-// ==========================================
 class GainCirclePage extends StatefulWidget {
   const GainCirclePage({super.key});
 
@@ -48,6 +43,9 @@ class GainCirclePage extends StatefulWidget {
 
 class _GainCirclePageState extends State<GainCirclePage> {
   final _formKey = GlobalKey<FormState>();
+
+  AutovalidateMode _autoValidateMode = AutovalidateMode.disabled;
+
   ComplexInputFormat _currentFormat = ComplexInputFormat.polarDegree;
 
   // 默认值 (Unilateral Case Example)
@@ -71,11 +69,12 @@ class _GainCirclePageState extends State<GainCirclePage> {
   Complex? _s11, _s22, _s21;
   List<double>? _targetGains;
 
+  Timer? _debounce;
+
   // =========================================================
-  // 示例列表： Example 4-3
+  // 示例列表
   // =========================================================
   late final List<GainCircleExamplePreset> _examples = [
-    // Example 4-3 (book)
     const GainCircleExamplePreset(
       name: 'Example 4-3 (500 MHz, Unilateral)',
       z0: '50',
@@ -87,8 +86,6 @@ class _GainCirclePageState extends State<GainCirclePage> {
       s22Mag: '0.8',
       s22Ang: '-80',
     ),
-
-    // 轻微变化：同样结构但相位不同，验证圆心方向
     const GainCircleExamplePreset(
       name: 'Example 4-3 Variant (phase changed)',
       z0: '50',
@@ -100,8 +97,6 @@ class _GainCirclePageState extends State<GainCirclePage> {
       s22Mag: '0.8',
       s22Ang: '-40',
     ),
-
-    // 比较温和的输入/输出反射，更多圆应该更“正常”
     const GainCircleExamplePreset(
       name: 'Normal Passive Ports (|S11|,|S22| small)',
       z0: '50',
@@ -113,8 +108,6 @@ class _GainCirclePageState extends State<GainCirclePage> {
       s22Mag: '0.25',
       s22Ang: '-20',
     ),
-
-    // |S11| 接近 1：看你的分母保护/异常提示
     const GainCircleExamplePreset(
       name: 'Edge Case: |S11| ~ 0.999 (near singular)',
       z0: '50',
@@ -126,8 +119,6 @@ class _GainCirclePageState extends State<GainCirclePage> {
       s22Mag: '0.8',
       s22Ang: '-80',
     ),
-
-    // |S22| 接近 1：看输出增益圆边界行为
     const GainCircleExamplePreset(
       name: 'Edge Case: |S22| ~ 0.999 (near singular)',
       z0: '50',
@@ -139,8 +130,6 @@ class _GainCirclePageState extends State<GainCirclePage> {
       s22Mag: '0.999',
       s22Ang: '-80',
     ),
-
-    // 端口不稳定：|S11| >= 1，应被你拦截报错
     const GainCircleExamplePreset(
       name: 'Error Test: Input Unstable (|S11| >= 1)',
       z0: '50',
@@ -152,8 +141,6 @@ class _GainCirclePageState extends State<GainCirclePage> {
       s22Mag: '0.8',
       s22Ang: '-80',
     ),
-
-    // 端口不稳定：|S22| >= 1，应被你拦截报错
     const GainCircleExamplePreset(
       name: 'Error Test: Output Unstable (|S22| >= 1)',
       z0: '50',
@@ -165,8 +152,6 @@ class _GainCirclePageState extends State<GainCirclePage> {
       s22Mag: '1.05',
       s22Ang: '-10',
     ),
-
-    // S21 ≈ 0：应被你拦截报错
     const GainCircleExamplePreset(
       name: 'Error Test: Zero Forward Gain (|S21| ≈ 0)',
       z0: '50',
@@ -178,8 +163,6 @@ class _GainCirclePageState extends State<GainCirclePage> {
       s22Mag: '0.8',
       s22Ang: '-80',
     ),
-
-    // Gain 列表故意给得过高：表格里会出现 Too High
     const GainCircleExamplePreset(
       name: 'Table Test: Gain targets too high',
       z0: '50',
@@ -195,11 +178,24 @@ class _GainCirclePageState extends State<GainCirclePage> {
 
   int _exampleIndex = 0;
 
-  // =========================================================
-  // 示例应用 / 循环切换
-  // =========================================================
+  void _scheduleAutoCalc() {
+    if (_autoValidateMode != AutovalidateMode.onUserInteraction) {
+      setState(() => _autoValidateMode = AutovalidateMode.onUserInteraction);
+    }
+
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 250), () {
+      if (!mounted) return;
+      _onCalculatePressed();
+    });
+  }
+
+  void _forceCalcFromTapBlank() {
+    FocusScope.of(context).unfocus();
+    _onCalculatePressed();
+  }
+
   void _applyExample(GainCircleExamplePreset ex) {
-    // 示例统一按 polar(deg) 写入，避免格式错配导致解析异常
     _currentFormat = ComplexInputFormat.polarDegree;
 
     z0C.text = ex.z0;
@@ -214,7 +210,6 @@ class _GainCirclePageState extends State<GainCirclePage> {
     s22C1.text = ex.s22Mag;
     s22C2.text = ex.s22Ang;
 
-    // unilateral fixed
     s12C1.text = '0';
     s12C2.text = '0';
   }
@@ -223,7 +218,6 @@ class _GainCirclePageState extends State<GainCirclePage> {
     setState(() {
       _exampleIndex = (_exampleIndex + 1) % _examples.length;
 
-      // 切换前清空旧结果（避免旧状态影响新 UI）
       _hasCalculated = false;
       _errorMessage = null;
       _s11 = null;
@@ -234,11 +228,9 @@ class _GainCirclePageState extends State<GainCirclePage> {
       _applyExample(_examples[_exampleIndex]);
     });
 
-    // 自动计算（不弹任何提示框）
     _onCalculatePressed();
   }
 
-  // 辅助函数：拼接输入字符串
   String _joinInput(TextEditingController c1, TextEditingController c2) {
     String a = c1.text.trim();
     String b = c2.text.trim();
@@ -255,27 +247,23 @@ class _GainCirclePageState extends State<GainCirclePage> {
     }
   }
 
-  // 辅助函数：解析复数
   Complex _parseComplex(TextEditingController c1, TextEditingController c2) {
-    String inputStr = _joinInput(c1, c2);
+    final inputStr = _joinInput(c1, c2);
     return ComplexParser.parseUniversal(inputStr, _currentFormat);
   }
 
-  // 格式切换
   void switchAllFormat(ComplexInputFormat newFormat) {
     if (newFormat == _currentFormat) return;
 
     setState(() {
       void convert(TextEditingController c1, TextEditingController c2) {
-        Complex c = _parseComplex(c1, c2);
+        final c = _parseComplex(c1, c2);
         if (newFormat == ComplexInputFormat.cartesian) {
           c1.text = ComplexFormatter.smartFormat(c.real, useScientific: false, precision: 6);
           c2.text = ComplexFormatter.smartFormat(c.imaginary, useScientific: false, precision: 6);
         } else {
           c1.text = ComplexFormatter.smartFormat(c.modulus, useScientific: false, precision: 6);
-          double angle = (newFormat == ComplexInputFormat.polarDegree)
-              ? c.phase() * 180 / pi
-              : c.phase();
+          final angle = (newFormat == ComplexInputFormat.polarDegree) ? c.phase() * 180 / pi : c.phase();
           c2.text = ComplexFormatter.smartFormat(angle, useScientific: false, precision: 6);
         }
       }
@@ -283,20 +271,16 @@ class _GainCirclePageState extends State<GainCirclePage> {
       convert(s11C1, s11C2);
       convert(s21C1, s21C2);
       convert(s22C1, s22C2);
-      // S12 不需要转换
 
       _currentFormat = newFormat;
-      if (_hasCalculated) {
-        _onCalculatePressed();
-      }
     });
+
+    _onCalculatePressed();
   }
 
-  // ===============================================
-  // 核心逻辑：带安全检查的计算方法
-  // ===============================================
   void _onCalculatePressed() {
-    if (!_formKey.currentState!.validate()) return;
+    final ok = _formKey.currentState?.validate() ?? false;
+    if (!ok) return;
 
     setState(() {
       _hasCalculated = false;
@@ -308,7 +292,6 @@ class _GainCirclePageState extends State<GainCirclePage> {
       final s21 = _parseComplex(s21C1, s21C2);
       final s22 = _parseComplex(s22C1, s22C2);
 
-      // 【检查 A】S21 ≈ 0
       if (s21.modulus < 1e-9) {
         setState(() {
           _hasCalculated = true;
@@ -317,23 +300,23 @@ class _GainCirclePageState extends State<GainCirclePage> {
         return;
       }
 
-      // 【检查 B】端口不稳定
       if (s11.modulus >= 1.0 - 1e-9) {
         setState(() {
           _hasCalculated = true;
-          _errorMessage = "Input Instability Detected (|S11| ≥ 1).\nUnilateral Max Gain is undefined.\nPlease use Stability Circles instead.";
+          _errorMessage =
+          "Input Instability Detected (|S11| ≥ 1).\nUnilateral Max Gain is undefined.\nPlease use Stability Circles instead.";
         });
         return;
       }
       if (s22.modulus >= 1.0 - 1e-9) {
         setState(() {
           _hasCalculated = true;
-          _errorMessage = "Output Instability Detected (|S22| ≥ 1).\nUnilateral Max Gain is undefined.\nPlease use Stability Circles instead.";
+          _errorMessage =
+          "Output Instability Detected (|S22| ≥ 1).\nUnilateral Max Gain is undefined.\nPlease use Stability Circles instead.";
         });
         return;
       }
 
-      // gain list
       final gains = gainDbListC.text
           .split(',')
           .map((e) => double.tryParse(e.trim()) ?? 0.0)
@@ -354,7 +337,6 @@ class _GainCirclePageState extends State<GainCirclePage> {
     }
   }
 
-  // S12 锁定 UI
   Widget _buildLockedS12Row() {
     return Container(
       width: double.infinity,
@@ -405,7 +387,6 @@ class _GainCirclePageState extends State<GainCirclePage> {
     );
   }
 
-  // 错误信息面板
   Widget _buildErrorPanel() {
     return Card(
       color: Colors.red[50],
@@ -442,7 +423,7 @@ class _GainCirclePageState extends State<GainCirclePage> {
   }
 
   Widget _buildFormatBtn(String text, ComplexInputFormat fmt) {
-    bool isSelected = _currentFormat == fmt;
+    final isSelected = _currentFormat == fmt;
     return ElevatedButton(
       onPressed: () => switchAllFormat(fmt),
       style: ElevatedButton.styleFrom(
@@ -460,7 +441,12 @@ class _GainCirclePageState extends State<GainCirclePage> {
     return TextFormField(
       controller: controller,
       validator: validator,
+      autovalidateMode: _autoValidateMode,
       keyboardType: const TextInputType.numberWithOptions(decimal: true),
+      textInputAction: TextInputAction.done,
+      onChanged: (_) => _scheduleAutoCalc(),
+      onFieldSubmitted: (_) => _onCalculatePressed(),
+      onEditingComplete: () => _onCalculatePressed(),
       decoration: InputDecoration(
         labelText: label,
         border: const OutlineInputBorder(),
@@ -473,11 +459,24 @@ class _GainCirclePageState extends State<GainCirclePage> {
   @override
   void initState() {
     super.initState();
-    // 启动就加载第一个示例（Example 4-3）
-    setState(() {
-      _exampleIndex = 0;
-      _applyExample(_examples[_exampleIndex]);
-    });
+    _exampleIndex = 0;
+    _applyExample(_examples[_exampleIndex]);
+  }
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    s11C1.dispose();
+    s11C2.dispose();
+    s21C1.dispose();
+    s21C2.dispose();
+    s22C1.dispose();
+    s22C2.dispose();
+    s12C1.dispose();
+    s12C2.dispose();
+    z0C.dispose();
+    gainDbListC.dispose();
+    super.dispose();
   }
 
   @override
@@ -486,146 +485,185 @@ class _GainCirclePageState extends State<GainCirclePage> {
 
     return CommonScaffold(
       title: 'Unilateral Gain Circles',
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // 顶部提示条
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(12),
-                margin: const EdgeInsets.only(bottom: 16),
-                decoration: BoxDecoration(
-                  color: Colors.blue[50],
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.blue.shade200),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.info_outline, color: Colors.blue),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: const [
-                          Text("Unilateral Mode (S12 = 0)", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black87)),
-                          SizedBox(height: 4),
-                          Text(
-                            "Feedback is assumed to be zero. Input and Output matching are decoupled.",
-                            style: TextStyle(color: Colors.black54, fontSize: 12),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              // ====== 示例切换（一个按钮）======
-              Card(
-                elevation: 0,
-                color: Colors.grey[50],
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                child: Padding(
+      body: GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onTap: _forceCalcFromTapBlank,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: Form(
+            key: _formKey,
+            autovalidateMode: _autoValidateMode,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: double.infinity,
                   padding: const EdgeInsets.all(12),
+                  margin: const EdgeInsets.only(bottom: 16),
+                  decoration: BoxDecoration(
+                    color: Colors.blue[50],
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.blue.shade200),
+                  ),
                   child: Row(
                     children: [
-                      Expanded(
-                        child: Text(
-                          'Current Example: ${ex.name}  (${_exampleIndex + 1}/${_examples.length})',
-                          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-                        ),
-                      ),
+                      const Icon(Icons.info_outline, color: Colors.blue),
                       const SizedBox(width: 10),
-                      ElevatedButton.icon(
-                        onPressed: _nextExampleAndRecalculate,
-                        icon: const Icon(Icons.loop),
-                        label: const Text('Next Example'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.deepPurple,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: const [
+                            Text(
+                              "Unilateral Mode (S12 = 0)",
+                              style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black87),
+                            ),
+                            SizedBox(height: 4),
+                            Text(
+                              "Feedback is assumed to be zero. Input and Output matching are decoupled.",
+                              style: TextStyle(color: Colors.black54, fontSize: 12),
+                            ),
+                          ],
                         ),
                       ),
                     ],
                   ),
                 ),
-              ),
-              const SizedBox(height: 16),
 
-              // 格式切换
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(children: [
-                  _buildFormatBtn('Cartesian (a+bj)', ComplexInputFormat.cartesian),
-                  const SizedBox(width: 8),
-                  _buildFormatBtn('Polar (deg)', ComplexInputFormat.polarDegree),
-                  const SizedBox(width: 8),
-                  _buildFormatBtn('Polar (rad)', ComplexInputFormat.polarRadian),
-                ]),
-              ),
-              const SizedBox(height: 20),
-
-              // S参数输入
-              ComplexInputRow(format: _currentFormat, ctrl1: s11C1, ctrl2: s11C2, paramName: 'S11', validator: commonValidator),
-              const SizedBox(height: 12),
-              _buildLockedS12Row(),
-              const SizedBox(height: 12),
-              ComplexInputRow(format: _currentFormat, ctrl1: s21C1, ctrl2: s21C2, paramName: 'S21', validator: commonValidator),
-              ComplexInputRow(format: _currentFormat, ctrl1: s22C1, ctrl2: s22C2, paramName: 'S22', validator: commonValidator),
-
-              const SizedBox(height: 12),
-
-              // 其他参数输入
-              Row(children: [
-                Expanded(child: _buildScalarInput(z0C, 'Z0 (Ω)', validator: commonValidator)),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: TextFormField(
-                    controller: gainDbListC,
-                    validator: (val) => (val == null || val.isEmpty) ? 'Required' : null,
-                    decoration: const InputDecoration(
-                      labelText: 'Target Gains (dB)',
-                      hintText: 'e.g. 3, 2, 1, 0',
-                      border: OutlineInputBorder(),
-                      contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-                      isDense: true,
+                Card(
+                  elevation: 0,
+                  color: Colors.grey[50],
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  child: Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            'Current Example: ${ex.name}  (${_exampleIndex + 1}/${_examples.length})',
+                            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        ElevatedButton.icon(
+                          onPressed: _nextExampleAndRecalculate,
+                          icon: const Icon(Icons.loop),
+                          label: const Text('Next Example'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.deepPurple,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
-              ]),
+                const SizedBox(height: 16),
 
-              const SizedBox(height: 24),
-              SizedBox(
-                width: double.infinity,
-                height: 48,
-                child: ElevatedButton.icon(
-                  onPressed: _onCalculatePressed,
-                  icon: const Icon(Icons.calculate),
-                  label: const Text('Calculate Unilateral Circles', style: TextStyle(fontSize: 16)),
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.deepPurple, foregroundColor: Colors.white),
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(children: [
+                    _buildFormatBtn('Cartesian (a+bj)', ComplexInputFormat.cartesian),
+                    const SizedBox(width: 8),
+                    _buildFormatBtn('Polar (deg)', ComplexInputFormat.polarDegree),
+                    const SizedBox(width: 8),
+                    _buildFormatBtn('Polar (rad)', ComplexInputFormat.polarRadian),
+                  ]),
                 ),
-              ),
-              const SizedBox(height: 24),
+                const SizedBox(height: 20),
 
-              // 结果显示区
-              if (_hasCalculated) ...[
-                if (_errorMessage != null)
-                  _buildErrorPanel()
-                else if (_s11 != null) ...[
-                  _UnilateralMaxGainSection(s11: _s11!, s21: _s21!, s22: _s22!),
-                  const SizedBox(height: 16),
-                  InputGainSection(s11: _s11!, targetGains: _targetGains!, currentFormat: _currentFormat),
-                  const SizedBox(height: 16),
-                  OutputGainSection(s22: _s22!, targetGains: _targetGains!, currentFormat: _currentFormat),
+                ComplexInputRow(
+                  format: _currentFormat,
+                  ctrl1: s11C1,
+                  ctrl2: s11C2,
+                  paramName: 'S11',
+                  validator: commonValidator,
+                  onAnyChanged: _scheduleAutoCalc,
+                  onSubmit: _onCalculatePressed,
+                  action1: TextInputAction.next,
+                  action2: TextInputAction.next,
+                ),
+                const SizedBox(height: 12),
+                _buildLockedS12Row(),
+                const SizedBox(height: 12),
+
+                ComplexInputRow(
+                  format: _currentFormat,
+                  ctrl1: s21C1,
+                  ctrl2: s21C2,
+                  paramName: 'S21',
+                  validator: commonValidator,
+                  onAnyChanged: _scheduleAutoCalc,
+                  onSubmit: _onCalculatePressed,
+                  action1: TextInputAction.next,
+                  action2: TextInputAction.next,
+                ),
+
+                ComplexInputRow(
+                  format: _currentFormat,
+                  ctrl1: s22C1,
+                  ctrl2: s22C2,
+                  paramName: 'S22',
+                  validator: commonValidator,
+                  onAnyChanged: _scheduleAutoCalc,
+                  onSubmit: _onCalculatePressed,
+                  action1: TextInputAction.next,
+                  action2: TextInputAction.done,
+                ),
+
+                const SizedBox(height: 12),
+
+                Row(children: [
+                  Expanded(child: _buildScalarInput(z0C, 'Z0 (Ω)', validator: commonValidator)),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: TextFormField(
+                      controller: gainDbListC,
+                      validator: (val) => (val == null || val.isEmpty) ? 'Required' : null,
+                      autovalidateMode: _autoValidateMode,
+                      textInputAction: TextInputAction.done,
+                      onChanged: (_) => _scheduleAutoCalc(),
+                      onFieldSubmitted: (_) => _onCalculatePressed(),
+                      onEditingComplete: () => _onCalculatePressed(),
+                      decoration: const InputDecoration(
+                        labelText: 'Target Gains (dB)',
+                        hintText: 'e.g. 3, 2, 1, 0',
+                        border: OutlineInputBorder(),
+                        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                        isDense: true,
+                      ),
+                    ),
+                  ),
+                ]),
+
+                const SizedBox(height: 24),
+                SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: ElevatedButton.icon(
+                    onPressed: _onCalculatePressed,
+                    icon: const Icon(Icons.calculate),
+                    label: const Text('Calculate Unilateral Circles', style: TextStyle(fontSize: 16)),
+                    style: ElevatedButton.styleFrom(backgroundColor: Colors.deepPurple, foregroundColor: Colors.white),
+                  ),
+                ),
+                const SizedBox(height: 24),
+
+                if (_hasCalculated) ...[
+                  if (_errorMessage != null)
+                    _buildErrorPanel()
+                  else if (_s11 != null) ...[
+                    _UnilateralMaxGainSection(s11: _s11!, s21: _s21!, s22: _s22!),
+                    const SizedBox(height: 16),
+                    InputGainSection(s11: _s11!, targetGains: _targetGains!, currentFormat: _currentFormat),
+                    const SizedBox(height: 16),
+                    OutputGainSection(s22: _s22!, targetGains: _targetGains!, currentFormat: _currentFormat),
+                  ],
                 ],
+                const SizedBox(height: 40),
               ],
-              const SizedBox(height: 40),
-            ],
+            ),
           ),
         ),
       ),
@@ -633,9 +671,7 @@ class _GainCirclePageState extends State<GainCirclePage> {
   }
 }
 
-// ==========================================
 // 模块 1: 单向最大增益汇总
-// ==========================================
 class _UnilateralMaxGainSection extends StatelessWidget {
   final Complex s11, s21, s22;
 
@@ -648,9 +684,10 @@ class _UnilateralMaxGainSection extends StatelessWidget {
   String _texNum(double val) => ComplexFormatter.smartFormat(val, useLatex: true);
   double toDb(double x) => (x <= 0) ? -999 : 10 * log(x) / ln10;
   Widget _texScroll(String latex) => SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Math.tex(latex, textStyle: const TextStyle(fontSize: 15, color: Colors.black87)));
+    scrollDirection: Axis.horizontal,
+    padding: const EdgeInsets.symmetric(vertical: 4),
+    child: Math.tex(latex, textStyle: const TextStyle(fontSize: 15, color: Colors.black87)),
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -671,8 +708,10 @@ class _UnilateralMaxGainSection extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text("⚠️ Potential Instability Detected",
-                  style: TextStyle(fontWeight: FontWeight.bold, color: Colors.deepOrange, fontSize: 16)),
+              const Text(
+                "⚠️ Potential Instability Detected",
+                style: TextStyle(fontWeight: FontWeight.bold, color: Colors.deepOrange, fontSize: 16),
+              ),
               const SizedBox(height: 8),
               Text("Input Port: ${inputStable ? 'Stable' : 'Unstable (|S11|=${_texNum(s11Abs)} > 1)'}"),
               Text("Output Port: ${outputStable ? 'Stable' : 'Unstable (|S22|=${_texNum(s22Abs)} > 1)'}"),
@@ -697,8 +736,10 @@ class _UnilateralMaxGainSection extends StatelessWidget {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       clipBehavior: Clip.antiAlias,
       child: ExpansionTile(
-        title: const Text("1. Maximum Unilateral Transducer Gain",
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.indigo)),
+        title: Math.tex(
+          r'\textbf{1.\;Maximum\;Unilateral\;Transducer\;Gain}',
+          textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.indigo),
+        ),
         initiallyExpanded: false,
         backgroundColor: Colors.white,
         collapsedBackgroundColor: Colors.grey[50],
@@ -710,41 +751,47 @@ class _UnilateralMaxGainSection extends StatelessWidget {
               children: [
                 _texScroll(r'G_{TU,max} = G_{s,max} \cdot G_0 \cdot G_{L,max}'),
                 const SizedBox(height: 12),
-
                 const Text("A. Max Source Gain (Input Match):", style: TextStyle(fontWeight: FontWeight.bold)),
-                _texScroll(r'G_{s,max} = \frac{1}{1-|S_{11}|^2} = \frac{1}{1-' +
-                    _texNum(s11Abs2) +
-                    r'} = \mathbf{' +
-                    _texNum(gsMax) +
-                    r'} \quad (' +
-                    _texNum(toDb(gsMax)) +
-                    r'\text{ dB})'),
-
+                _texScroll(
+                  r'G_{s,max} = \frac{1}{1-|S_{11}|^2} = \frac{1}{1-' +
+                      _texNum(s11Abs2) +
+                      r'} = \mathbf{' +
+                      _texNum(gsMax) +
+                      r'} \quad (' +
+                      _texNum(toDb(gsMax)) +
+                      r'\text{ dB})',
+                ),
                 const Text("B. Transistor Intrinsic Gain:", style: TextStyle(fontWeight: FontWeight.bold)),
-                _texScroll(r'G_0 = |S_{21}|^2 = ' + _texNum(s21Abs2) + r' \quad (' + _texNum(toDb(g0)) + r'\text{ dB})'),
-
+                _texScroll(
+                  r'G_0 = |S_{21}|^2 = ' +
+                      _texNum(s21Abs2) +
+                      r' \quad (' +
+                      _texNum(toDb(g0)) +
+                      r'\text{ dB})',
+                ),
                 const Text("C. Max Load Gain (Output Match):", style: TextStyle(fontWeight: FontWeight.bold)),
-                _texScroll(r'G_{L,max} = \frac{1}{1-|S_{22}|^2} = \frac{1}{1-' +
-                    _texNum(s22Abs2) +
-                    r'} = \mathbf{' +
-                    _texNum(glMax) +
-                    r'} \quad (' +
-                    _texNum(toDb(glMax)) +
-                    r'\text{ dB})'),
-
+                _texScroll(
+                  r'G_{L,max} = \frac{1}{1-|S_{22}|^2} = \frac{1}{1-' +
+                      _texNum(s22Abs2) +
+                      r'} = \mathbf{' +
+                      _texNum(glMax) +
+                      r'} \quad (' +
+                      _texNum(toDb(glMax)) +
+                      r'\text{ dB})',
+                ),
                 const Divider(),
-
                 const Text("Total Maximum Gain:", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black)),
-                _texScroll(r'G_{TU,max} = ' +
-                    _texNum(gsMax) +
-                    r' \cdot ' +
-                    _texNum(g0) +
-                    r' \cdot ' +
-                    _texNum(glMax) +
-                    r' = \mathbf{' +
-                    _texNum(gtuMax) +
-                    r'}'),
-
+                _texScroll(
+                  r'G_{TU,max} = ' +
+                      _texNum(gsMax) +
+                      r' \cdot ' +
+                      _texNum(g0) +
+                      r' \cdot ' +
+                      _texNum(glMax) +
+                      r' = \mathbf{' +
+                      _texNum(gtuMax) +
+                      r'}',
+                ),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(color: Colors.blue[50], borderRadius: BorderRadius.circular(4)),
@@ -762,9 +809,7 @@ class _UnilateralMaxGainSection extends StatelessWidget {
   }
 }
 
-// ==========================================
 // 模块 2: 输入增益圆
-// ==========================================
 class InputGainSection extends StatefulWidget {
   final Complex s11;
   final List<double> targetGains;
@@ -780,11 +825,19 @@ class _InputGainSectionState extends State<InputGainSection> {
   List<bool> _expanded = [];
 
   String _texNum(double val) => ComplexFormatter.smartFormat(val, useLatex: true);
-  Widget _subHeader(String text) =>
-      Padding(padding: const EdgeInsets.only(top: 8, bottom: 2), child: Text(text, style: const TextStyle(fontWeight: FontWeight.bold)));
+
+  // 辅助函数：转dB
+  double _toDb(double lin) => (lin <= 1e-9) ? -999 : 10 * log(lin) / ln10;
+
+  Widget _subHeader(String text) => Padding(
+    padding: const EdgeInsets.only(top: 8, bottom: 2),
+    child: Text(text, style: const TextStyle(fontWeight: FontWeight.bold)),
+  );
   Widget _texScroll(String latex) => SingleChildScrollView(
-      scrollDirection: Axis.horizontal, padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Math.tex(latex, textStyle: const TextStyle(fontSize: 15, color: Colors.black87)));
+    scrollDirection: Axis.horizontal,
+    padding: const EdgeInsets.symmetric(vertical: 4),
+    child: Math.tex(latex, textStyle: const TextStyle(fontSize: 15, color: Colors.black87)),
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -792,6 +845,9 @@ class _InputGainSectionState extends State<InputGainSection> {
     final s11Abs2 = s11Abs * s11Abs;
     final denomMax = 1 - s11Abs2;
     final gsMax = (denomMax <= 0) ? 1e9 : 1 / denomMax;
+
+    // 计算最大增益的 dB 值，用于显示
+    final gsMaxDb = _toDb(gsMax);
 
     List<GainCircleData> circles = [];
     List<List<String>> tableData = [];
@@ -807,7 +863,7 @@ class _InputGainSectionState extends State<InputGainSection> {
       bool exceedsMax = (G_lin > gsMax * 1.0001);
 
       if (exceedsMax) {
-        tableData.add([_texNum(G_db), "Too High", "-", "-"]);
+        tableData.add([_texNum(G_db), "> Max (${_texNum(gsMaxDb)}dB)", "-", "-"]);
         continue;
       }
 
@@ -835,7 +891,10 @@ class _InputGainSectionState extends State<InputGainSection> {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       clipBehavior: Clip.antiAlias,
       child: ExpansionTile(
-        title: const Text("2. Input Gain Circles (Gs)", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.black)),
+        title: Math.tex(
+          r'\textbf{2.\;Input\;Gain\;Circles}\;(G_s)',
+          textStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.black),
+        ),
         initiallyExpanded: false,
         backgroundColor: Colors.white,
         collapsedBackgroundColor: Colors.grey[50],
@@ -862,7 +921,7 @@ class _InputGainSectionState extends State<InputGainSection> {
                       DataColumn(label: Text('Radius')),
                     ],
                     rows: tableData.map((row) {
-                      bool isError = row[1] == "Too High";
+                      bool isError = row[1].startsWith("> Max");
                       return DataRow(
                         cells: row.map((c) {
                           if (c.contains(r'\')) {
@@ -873,6 +932,7 @@ class _InputGainSectionState extends State<InputGainSection> {
                             style: TextStyle(
                               color: isError ? Colors.red : Colors.black,
                               fontWeight: isError ? FontWeight.bold : FontWeight.normal,
+                              fontSize: 13,
                             ),
                           ));
                         }).toList(),
@@ -902,7 +962,6 @@ class _InputGainSectionState extends State<InputGainSection> {
 
                     double denom = 1 - s11Abs2 * (1 - g_s);
                     if (denom.abs() < 1e-9) denom = 1e-9;
-
                     double d_mag = (g_s * s11Abs) / denom;
                     double r_sq_inner = 1 - g_s;
 
@@ -912,64 +971,92 @@ class _InputGainSectionState extends State<InputGainSection> {
                         : -widget.s11.phase();
 
                     return ExpansionPanel(
-                      headerBuilder: (context, isExpanded) => ListTile(
-                        title: Text(
-                          'Circle ${index + 1}: Target Gs = $G_db dB ${exceedsMax ? "(Invalid)" : ""}',
-                          style: TextStyle(fontWeight: FontWeight.bold, color: exceedsMax ? Colors.red : Colors.black),
-                        ),
-                      ),
+                      headerBuilder: (context, isExpanded) {
+                        if (exceedsMax) {
+                          return ListTile(
+                            title: Text(
+                              'Target Gs (${_texNum(G_db)} dB) > Max (${_texNum(gsMaxDb)} dB)',
+                              style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.red),
+                            ),
+                            leading: const Icon(Icons.error_outline, color: Colors.red, size: 20),
+                          );
+                        }
+                        return ListTile(
+                          title: Text(
+                            'Circle ${index + 1}: Target Gs = $G_db dB',
+                            style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black),
+                          ),
+                        );
+                      },
                       body: Padding(
                         padding: const EdgeInsets.all(16.0),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             if (exceedsMax)
-                              const Text("⚠️ Target Gain > Maximum Available Gain.", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
-
+                              Container(
+                                padding: const EdgeInsets.all(8),
+                                margin: const EdgeInsets.only(bottom: 8),
+                                decoration: BoxDecoration(color: Colors.red[50], borderRadius: BorderRadius.circular(6)),
+                                child: Text(
+                                  "Invalid: The target gain ($G_db dB) is theoretically impossible because it exceeds the Maximum Available Source Gain ($gsMaxDb dB).",
+                                  style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold, height: 1.4),
+                                ),
+                              ),
                             _subHeader("1. Normalized Gain (gs):"),
                             _texScroll(r'\text{Formula: } g_s = \frac{G_s}{G_{s,max}}'),
-                            _texScroll(r'\text{Substitution: } g_s = \frac{10^{' +
-                                _texNum(G_db) +
-                                r'/10}}{' +
-                                _texNum(gsMax) +
-                                r'} = \frac{' +
-                                _texNum(G_lin) +
-                                r'}{' +
-                                _texNum(gsMax) +
-                                r'}'),
+                            _texScroll(
+                              r'\text{Substitution: } g_s = \frac{10^{' +
+                                  _texNum(G_db) +
+                                  r'/10}}{' +
+                                  _texNum(gsMax) +
+                                  r'} = \frac{' +
+                                  _texNum(G_lin) +
+                                  r'}{' +
+                                  _texNum(gsMax) +
+                                  r'}',
+                            ),
                             _texScroll(r'\text{Result: } g_s = ' + _texNum(g_s)),
-
                             if (!exceedsMax) ...[
                               const Divider(),
                               _subHeader("2. Center Distance (d):"),
                               _texScroll(r'\text{Formula: } d_{g_s} = \frac{g_s |S_{11}|}{1 - |S_{11}|^2 (1-g_s)}'),
-                              _texScroll(r'\text{Substitution: } d_{g_s} = \frac{' +
-                                  _texNum(g_s) +
-                                  r' \cdot ' +
-                                  _texNum(s11Abs) +
-                                  r'}{1 - ' +
-                                  _texNum(s11Abs2) +
-                                  r'(1 - ' +
-                                  _texNum(g_s) +
-                                  r')}'),
+                              _texScroll(
+                                r'\text{Substitution: } d_{g_s} = \frac{' +
+                                    _texNum(g_s) +
+                                    r' \cdot ' +
+                                    _texNum(s11Abs) +
+                                    r'}{1 - ' +
+                                    _texNum(s11Abs2) +
+                                    r'(1 - ' +
+                                    _texNum(g_s) +
+                                    r')}',
+                              ),
                               _texScroll(r'\text{Result (Scalar): } d_{g_s} = ' + _texNum(d_mag)),
-                              _texScroll(r'\text{Result (Complex): } C_{g_s} = d_{g_s} \angle S_{11}^* = ' +
-                                  _texNum(d_mag) +
-                                  r' \angle ' +
-                                  _texNum(angleVal) +
-                                  angleSymbol),
-
+                              _texScroll(
+                                r'\text{Result (Complex): } C_{g_s} = d_{g_s} \angle S_{11}^* = ' +
+                                    _texNum(d_mag) +
+                                    r' \angle ' +
+                                    _texNum(angleVal) +
+                                    angleSymbol,
+                              ),
                               const Divider(),
                               _subHeader("3. Radius (r):"),
-                              _texScroll(r'\text{Formula: } r_{g_s} = \frac{\sqrt{1-g_s}(1-|S_{11}|^2)}{1 - |S_{11}|^2 (1-g_s)}'),
-                              _texScroll(r'\text{Substitution: } r_{g_s} = \frac{\sqrt{1-' +
-                                  _texNum(g_s) +
-                                  r'}(1-' +
-                                  _texNum(s11Abs2) +
-                                  r')}{' +
-                                  _texNum(denom) +
-                                  r'}'),
-                              _texScroll(r'\text{Result: } r_{g_s} = ' + _texNum((sqrt(max(0, r_sq_inner)) * (1 - s11Abs2)) / denom)),
+                              _texScroll(
+                                  r'\text{Formula: } r_{g_s} = \frac{\sqrt{1-g_s}(1-|S_{11}|^2)}{1 - |S_{11}|^2 (1-g_s)}'),
+                              _texScroll(
+                                r'\text{Substitution: } r_{g_s} = \frac{\sqrt{1-' +
+                                    _texNum(g_s) +
+                                    r'}(1-' +
+                                    _texNum(s11Abs2) +
+                                    r')}{' +
+                                    _texNum(denom) +
+                                    r'}',
+                              ),
+                              _texScroll(
+                                r'\text{Result: } r_{g_s} = ' +
+                                    _texNum((sqrt(max(0, r_sq_inner)) * (1 - s11Abs2)) / denom),
+                              ),
                             ],
                           ],
                         ),
@@ -988,9 +1075,7 @@ class _InputGainSectionState extends State<InputGainSection> {
   }
 }
 
-// ==========================================
 // 模块 3: 输出增益圆
-// ==========================================
 class OutputGainSection extends StatefulWidget {
   final Complex s22;
   final List<double> targetGains;
@@ -1006,11 +1091,19 @@ class _OutputGainSectionState extends State<OutputGainSection> {
   List<bool> _expanded = [];
 
   String _texNum(double val) => ComplexFormatter.smartFormat(val, useLatex: true);
+
+  // 辅助函数：转dB
+  double _toDb(double lin) => (lin <= 1e-9) ? -999 : 10 * log(lin) / ln10;
+
   Widget _texScroll(String latex) => SingleChildScrollView(
-      scrollDirection: Axis.horizontal, padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Math.tex(latex, textStyle: const TextStyle(fontSize: 15, color: Colors.black87)));
-  Widget _subHeader(String text) =>
-      Padding(padding: const EdgeInsets.only(top: 8, bottom: 2), child: Text(text, style: const TextStyle(fontWeight: FontWeight.bold)));
+    scrollDirection: Axis.horizontal,
+    padding: const EdgeInsets.symmetric(vertical: 4),
+    child: Math.tex(latex, textStyle: const TextStyle(fontSize: 15, color: Colors.black87)),
+  );
+  Widget _subHeader(String text) => Padding(
+    padding: const EdgeInsets.only(top: 8, bottom: 2),
+    child: Text(text, style: const TextStyle(fontWeight: FontWeight.bold)),
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -1018,6 +1111,9 @@ class _OutputGainSectionState extends State<OutputGainSection> {
     final s22Abs2 = s22Abs * s22Abs;
     final denomMax = 1 - s22Abs2;
     final glMax = (denomMax <= 0) ? 1e9 : 1 / denomMax;
+
+    // 计算最大增益 dB
+    final glMaxDb = _toDb(glMax);
 
     List<GainCircleData> circles = [];
     List<List<String>> tableData = [];
@@ -1033,7 +1129,7 @@ class _OutputGainSectionState extends State<OutputGainSection> {
       bool exceedsMax = (G_lin > glMax * 1.0001);
 
       if (exceedsMax) {
-        tableData.add([_texNum(G_db), "Too High", "-", "-"]);
+        tableData.add([_texNum(G_db), "> Max (${_texNum(glMaxDb)}dB)", "-", "-"]);
         continue;
       }
 
@@ -1060,7 +1156,10 @@ class _OutputGainSectionState extends State<OutputGainSection> {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       clipBehavior: Clip.antiAlias,
       child: ExpansionTile(
-        title: const Text("3. Output Gain Circles (GL)", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.black)),
+        title: Math.tex(
+          r'\textbf{3.\;Output\;Gain\;Circles}\;(G_L)',
+          textStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.black),
+        ),
         initiallyExpanded: false,
         backgroundColor: Colors.white,
         collapsedBackgroundColor: Colors.grey[50],
@@ -1073,7 +1172,6 @@ class _OutputGainSectionState extends State<OutputGainSection> {
                 if (circles.isNotEmpty)
                   Center(child: SizedBox(height: 320, width: 320, child: SmithGainCirclePainter(gainCircles: circles, canvasSize: 320))),
                 const SizedBox(height: 16),
-
                 const Text("Summary Table:", style: TextStyle(fontWeight: FontWeight.bold)),
                 SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
@@ -1087,7 +1185,7 @@ class _OutputGainSectionState extends State<OutputGainSection> {
                       DataColumn(label: Text('Radius')),
                     ],
                     rows: tableData.map((row) {
-                      bool isError = row[1] == "Too High";
+                      bool isError = row[1].startsWith("> Max");
                       return DataRow(
                         cells: row.map((c) {
                           if (c.contains(r'\')) {
@@ -1098,6 +1196,7 @@ class _OutputGainSectionState extends State<OutputGainSection> {
                             style: TextStyle(
                               color: isError ? Colors.red : Colors.black,
                               fontWeight: isError ? FontWeight.bold : FontWeight.normal,
+                              fontSize: 13,
                             ),
                           ));
                         }).toList(),
@@ -1106,10 +1205,8 @@ class _OutputGainSectionState extends State<OutputGainSection> {
                   ),
                 ),
                 const SizedBox(height: 16),
-
                 const Text("Detailed Steps (Tap to expand):", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.indigo)),
                 const SizedBox(height: 8),
-
                 ExpansionPanelList(
                   elevation: 1,
                   expansionCallback: (panelIndex, isExpanded) {
@@ -1127,7 +1224,6 @@ class _OutputGainSectionState extends State<OutputGainSection> {
 
                     double denom = 1 - s22Abs2 * (1 - g_l);
                     if (denom.abs() < 1e-9) denom = 1e-9;
-
                     double d_mag = (g_l * s22Abs) / denom;
                     double r_sq_inner = 1 - g_l;
 
@@ -1137,64 +1233,92 @@ class _OutputGainSectionState extends State<OutputGainSection> {
                         : -widget.s22.phase();
 
                     return ExpansionPanel(
-                      headerBuilder: (context, isExpanded) => ListTile(
-                        title: Text(
-                          'Circle ${index + 1}: Target GL = $G_db dB ${exceedsMax ? "(Invalid)" : ""}',
-                          style: TextStyle(fontWeight: FontWeight.bold, color: exceedsMax ? Colors.red : Colors.black),
-                        ),
-                      ),
+                      headerBuilder: (context, isExpanded) {
+                        if (exceedsMax) {
+                          return ListTile(
+                            title: Text(
+                              'Target GL (${_texNum(G_db)} dB) > Max (${_texNum(glMaxDb)} dB)',
+                              style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.red),
+                            ),
+                            leading: const Icon(Icons.error_outline, color: Colors.red, size: 20),
+                          );
+                        }
+                        return ListTile(
+                          title: Text(
+                            'Circle ${index + 1}: Target GL = $G_db dB',
+                            style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.black),
+                          ),
+                        );
+                      },
                       body: Padding(
                         padding: const EdgeInsets.all(16.0),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             if (exceedsMax)
-                              const Text("⚠️ Target Gain > Maximum Available Gain.", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
-
+                              Container(
+                                padding: const EdgeInsets.all(8),
+                                margin: const EdgeInsets.only(bottom: 8),
+                                decoration: BoxDecoration(color: Colors.red[50], borderRadius: BorderRadius.circular(6)),
+                                child: Text(
+                                  "Invalid: The target gain ($G_db dB) is theoretically impossible because it exceeds the Maximum Available Load Gain ($glMaxDb dB).",
+                                  style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold, height: 1.4),
+                                ),
+                              ),
                             _subHeader("1. Normalized Gain (gL):"),
                             _texScroll(r'\text{Formula: } g_L = \frac{G_L}{G_{L,max}}'),
-                            _texScroll(r'\text{Substitution: } g_L = \frac{10^{' +
-                                _texNum(G_db) +
-                                r'/10}}{' +
-                                _texNum(glMax) +
-                                r'} = \frac{' +
-                                _texNum(G_lin) +
-                                r'}{' +
-                                _texNum(glMax) +
-                                r'}'),
+                            _texScroll(
+                              r'\text{Substitution: } g_L = \frac{10^{' +
+                                  _texNum(G_db) +
+                                  r'/10}}{' +
+                                  _texNum(glMax) +
+                                  r'} = \frac{' +
+                                  _texNum(G_lin) +
+                                  r'}{' +
+                                  _texNum(glMax) +
+                                  r'}',
+                            ),
                             _texScroll(r'\text{Result: } g_L = ' + _texNum(g_l)),
-
                             if (!exceedsMax) ...[
                               const Divider(),
                               _subHeader("2. Center Distance (d):"),
                               _texScroll(r'\text{Formula: } d_{g_L} = \frac{g_L |S_{22}|}{1 - |S_{22}|^2 (1-g_L)}'),
-                              _texScroll(r'\text{Substitution: } d_{g_L} = \frac{' +
-                                  _texNum(g_l) +
-                                  r' \cdot ' +
-                                  _texNum(s22Abs) +
-                                  r'}{1 - ' +
-                                  _texNum(s22Abs2) +
-                                  r'(1 - ' +
-                                  _texNum(g_l) +
-                                  r')}'),
+                              _texScroll(
+                                r'\text{Substitution: } d_{g_L} = \frac{' +
+                                    _texNum(g_l) +
+                                    r' \cdot ' +
+                                    _texNum(s22Abs) +
+                                    r'}{1 - ' +
+                                    _texNum(s22Abs2) +
+                                    r'(1 - ' +
+                                    _texNum(g_l) +
+                                    r')}',
+                              ),
                               _texScroll(r'\text{Result (Scalar): } d_{g_L} = ' + _texNum(d_mag)),
-                              _texScroll(r'\text{Result (Complex): } C_{g_L} = d_{g_L} \angle S_{22}^* = ' +
-                                  _texNum(d_mag) +
-                                  r' \angle ' +
-                                  _texNum(angleVal) +
-                                  angleSymbol),
-
+                              _texScroll(
+                                r'\text{Result (Complex): } C_{g_L} = d_{g_L} \angle S_{22}^* = ' +
+                                    _texNum(d_mag) +
+                                    r' \angle ' +
+                                    _texNum(angleVal) +
+                                    angleSymbol,
+                              ),
                               const Divider(),
                               _subHeader("3. Radius (r):"),
-                              _texScroll(r'\text{Formula: } r_{g_L} = \frac{\sqrt{1-g_L}(1-|S_{22}|^2)}{1 - |S_{22}|^2 (1-g_L)}'),
-                              _texScroll(r'\text{Substitution: } r_{g_L} = \frac{\sqrt{1-' +
-                                  _texNum(g_l) +
-                                  r'}(1-' +
-                                  _texNum(s22Abs2) +
-                                  r')}{' +
-                                  _texNum(denom) +
-                                  r'}'),
-                              _texScroll(r'\text{Result: } r_{g_L} = ' + _texNum((sqrt(max(0, r_sq_inner)) * (1 - s22Abs2)) / denom)),
+                              _texScroll(
+                                  r'\text{Formula: } r_{g_L} = \frac{\sqrt{1-g_L}(1-|S_{22}|^2)}{1 - |S_{22}|^2 (1-g_L)}'),
+                              _texScroll(
+                                r'\text{Substitution: } r_{g_L} = \frac{\sqrt{1-' +
+                                    _texNum(g_l) +
+                                    r'}(1-' +
+                                    _texNum(s22Abs2) +
+                                    r')}{' +
+                                    _texNum(denom) +
+                                    r'}',
+                              ),
+                              _texScroll(
+                                r'\text{Result: } r_{g_L} = ' +
+                                    _texNum((sqrt(max(0, r_sq_inner)) * (1 - s22Abs2)) / denom),
+                              ),
                             ],
                           ],
                         ),
