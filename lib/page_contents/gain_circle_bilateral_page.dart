@@ -1197,32 +1197,42 @@ class _GainCircleBilateralPageState extends State<GainCircleBilateralPage> {
               if (GmlMinus != null) _texScroll(r'\Gamma_{ML-} = ' + ComplexFormatter.latex(GmlMinus, _currentFormat, precision: 3)),
               if (GmlPlus != null) _texScroll(r'\Gamma_{ML+} = ' + ComplexFormatter.latex(GmlPlus, _currentFormat, precision: 3)),
               const Divider(),
+
               _text('Chosen (ΓS, ΓL) by case:', bold: true),
-              _text('Case rule: ${_caseInfo.conjMatchRule}'),
+
+              // 1. Selection Rule in LaTeX
+              _texScroll(r'\textbf{Selection Rule:}\quad ' + _caseInfo.conjMatchRule),
+
+              // 2. Gamma S in LaTeX
               if (chosenGs != null)
                 _texScroll(r'\Gamma_S = ' + ComplexFormatter.latex(chosenGs, _currentFormat, precision: 3))
               else
-                _text('ΓS not available (2C1≈0).'),
+                _texScroll(r'\Gamma_S: \text{undefined } (|2C_1| \approx 0)'),
+
+              // 3. Gamma L in LaTeX
               if (chosenGl != null)
                 _texScroll(r'\Gamma_L = ' + ComplexFormatter.latex(chosenGl, _currentFormat, precision: 3))
               else
-                _text('ΓL not available (2C2≈0).'),
+                _texScroll(r'\Gamma_L: \text{undefined } (|2C_2| \approx 0)'),
+
               const Divider(),
-              if (_case == BilateralCase.c)
-                _text(
-                  'Case C note: K ≤ 1 → conjugate match is not guaranteed. We still show ΓMs±/ΓML± for teaching; prefer passive (|Γ|<1) when available.',
-                  bold: true,
-                ),
-              if (_case == BilateralCase.b)
-                _text(
-                  'Case B note: K > 1 and |Δ| > 1 → use plus sign per note, but do NOT claim the gain is maximum yet.',
-                  bold: true,
-                ),
-              if (_case == BilateralCase.a)
-                _text(
-                  'Case A note: unconditionally stable → minus sign solutions must be used (ΓS=ΓMs−, ΓL=ΓML−).',
-                  bold: true,
-                ),
+
+              // 4. Notes in LaTeX (FIXED: Using list spread to avoid '\\' newline crash)
+              if (_case == BilateralCase.c) ...[
+                _texScroll(r'\textbf{Note (Case C):}\ K \le 1 \implies \text{Match not guaranteed.}'),
+                _texScroll(r'\text{Showing } \Gamma_{Ms\pm}/\Gamma_{ML\pm} \text{ for teaching reference.}'),
+                _texScroll(r'\text{Prefer passive solutions } (|\Gamma|<1) \text{ if available.}'),
+              ],
+
+              if (_case == BilateralCase.b) ...[
+                _texScroll(r'\textbf{Note (Case B):}\ K > 1 \text{ and } |\Delta| > 1 \implies \text{Use (+) sign.}'),
+                _texScroll(r'\text{However, do NOT claim } G_{max} \text{ (potential instability).}'),
+              ],
+
+              if (_case == BilateralCase.a) ...[
+                _texScroll(r'\textbf{Note (Case A):}\ \text{Unconditionally stable} \implies \text{Use (-) sign.}'),
+                _texScroll(r'\text{Must use } \Gamma_S = \Gamma_{Ms-},\; \Gamma_L = \Gamma_{ML-}.'),
+              ],
             ],
           ),
         );
