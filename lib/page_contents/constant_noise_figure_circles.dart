@@ -193,6 +193,23 @@ class _ConstantNoiseFigureCirclesPageState
       fTargetsDb: const [2.5, 3.0, 3.5, 5.0],
     ),
     NoiseCircleExample(
+      title: 'Example 4-9 (1 GHz, RF transistor)',
+      subtitle:
+      'Fmin=3 dB, Γopt=0.45∠180°, Rn=4 Ω, Z0=50 Ω, target F: 3.5 dB',
+      mode: SourceLoadInputMode.gamma,
+      preferredFormat: ComplexInputFormat.polarDegree,
+      z0: 50,
+      fminDb: 3.0,
+      rnOhm: 4.0,
+      gammaOpt: Complex.fromPolar(r: 0.45, theta: 180 * pi / 180),
+      gammaS: Complex.fromPolar(r: 0.45, theta: 180 * pi / 180),
+      gammaL: Complex.fromPolar(r: 0.10, theta: -20 * pi / 180),
+      zs: Complex(50, 0),
+      zl: Complex(50, 0),
+      fTargetsDb: const [3.5],
+    ),
+
+    NoiseCircleExample(
       title: 'Example A (Γs close to Γopt)',
       subtitle: 'NF should be close to Fmin when Γs ≈ Γopt',
       mode: SourceLoadInputMode.gamma,
@@ -415,6 +432,13 @@ class _ConstantNoiseFigureCirclesPageState
   void _nextExample() {
     setState(() {
       _exampleIndex = (_exampleIndex + 1) % _examples.length;
+    });
+    _applyExample(_examples[_exampleIndex]);
+  }
+
+  void _prevExample() {
+    setState(() {
+      _exampleIndex = (_exampleIndex - 1 + _examples.length) % _examples.length;
     });
     _applyExample(_examples[_exampleIndex]);
   }
@@ -1259,7 +1283,7 @@ class _ConstantNoiseFigureCirclesPageState
           ),
         ),
 
-        // example row + next button
+        // example row + prev/next buttons
         Row(
           children: [
             Expanded(
@@ -1270,24 +1294,49 @@ class _ConstantNoiseFigureCirclesPageState
                 color: Colors.black87,
               ),
             ),
+
+            // Previous Example (same style)
             ElevatedButton.icon(
-              onPressed: _nextExample,
-              icon: const Icon(Icons.loop),
-              label: _latexTitle("Next Example",
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white),
+              onPressed: _prevExample,
+              icon: const Icon(Icons.chevron_left),
+              label: _latexTitle(
+                "Previous Example",
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.deepPurple,
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10)),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                elevation: 2,
+              ),
+            ),
+
+            const SizedBox(width: 10),
+
+            // Next Example (original)
+            ElevatedButton.icon(
+              onPressed: _nextExample,
+              icon: const Icon(Icons.chevron_right),
+              label: _latexTitle(
+                "Next Example",
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.deepPurple,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                 elevation: 2,
               ),
             ),
           ],
         ),
+
         const SizedBox(height: 6),
         Align(
           alignment: Alignment.centerLeft,

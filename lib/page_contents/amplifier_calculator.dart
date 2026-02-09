@@ -1163,6 +1163,34 @@ class _AmplifierHomePageState extends State<AmplifierHomePage> {
     calculate();
   }
 
+  void _previousExampleAndRecalculate() {
+    setState(() {
+      _exampleIndex = (_exampleIndex - 1 + _examples.length) % _examples.length;
+
+      _stepPanels = [];
+      _expandedList = [];
+
+      _sourceRegionExpanded = false;
+      _loadRegionExpanded = false;
+      _sourceRegionWidget = null;
+      _loadRegionWidget = null;
+
+      sourceCenter = null;
+      sourceRadius = null;
+      loadCenter = null;
+      loadRadius = null;
+      s22Abs = null;
+      s11Abs = null;
+
+      isPotentiallyUnstableSource = false;
+      isPotentiallyUnstableLoad = false;
+
+      _applyExample(_examples[_exampleIndex]);
+    });
+
+    calculate();
+  }
+
   String _joinInput(TextEditingController c1, TextEditingController c2) {
     String a = c1.text.trim();
     String b = c2.text.trim();
@@ -1497,8 +1525,20 @@ class _AmplifierHomePageState extends State<AmplifierHomePage> {
                         ),
                         const SizedBox(width: 10),
                         ElevatedButton.icon(
+                          onPressed: _previousExampleAndRecalculate,
+                          icon: const Icon(Icons.chevron_left),
+                          label: const Text('Previous Example'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.deepPurple,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        ElevatedButton.icon(
                           onPressed: _nextExampleAndRecalculate,
-                          icon: const Icon(Icons.loop),
+                          icon: const Icon(Icons.chevron_right),
                           label: const Text('Next Example'),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.deepPurple,

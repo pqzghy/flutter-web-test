@@ -180,6 +180,15 @@ class _GainCircleBilateralPageState extends State<GainCircleBilateralPage> {
         gainDbList: '10',
       ),
       GainCircleExample(
+        name: 'Example 4-8 (9 GHz, Bilateral)',
+        s11Mag: 0.55, s11AngDeg: -150,
+        s12Mag: 0.04, s12AngDeg: 20,
+        s21Mag: 2.82, s21AngDeg: 180,
+        s22Mag: 0.45, s22AngDeg: -30,
+        z0: 50,
+        gainDbList: '1,1.5',
+      ),
+      GainCircleExample(
         name: 'Example (Pozar 11.4 style)',
         s11Mag: 0.6, s11AngDeg: -60,
         s12Mag: 0.05, s12AngDeg: 26,
@@ -292,6 +301,13 @@ class _GainCircleBilateralPageState extends State<GainCircleBilateralPage> {
   void _nextExample() {
     setState(() {
       _exampleIndex = (_exampleIndex + 1) % _examples.length;
+    });
+    _applyExample(_examples[_exampleIndex], autoCalculate: true);
+  }
+
+  void _prevExample() {
+    setState(() {
+      _exampleIndex = (_exampleIndex - 1 + _examples.length) % _examples.length;
     });
     _applyExample(_examples[_exampleIndex], autoCalculate: true);
   }
@@ -425,10 +441,27 @@ class _GainCircleBilateralPageState extends State<GainCircleBilateralPage> {
               ),
             ),
           ),
+
           const SizedBox(width: 12),
+
+          ElevatedButton.icon(
+            onPressed: _prevExample,
+            icon: const Icon(Icons.chevron_left),
+            label: const Text('Previous Example'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.deepPurple,
+              foregroundColor: Colors.white,
+              elevation: 0,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
+            ),
+          ),
+
+          const SizedBox(width: 10),
+
           ElevatedButton.icon(
             onPressed: _nextExample,
-            icon: const Icon(Icons.refresh, size: 18),
+            icon: const Icon(Icons.chevron_right),
             label: const Text('Next Example'),
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.deepPurple,

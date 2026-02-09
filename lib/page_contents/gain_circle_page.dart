@@ -98,6 +98,28 @@ class _GainCirclePageState extends State<GainCirclePage> {
       s22Ang: '-40',
     ),
     const GainCircleExamplePreset(
+      name: 'Example 4-7 (3 GHz, Unilateral, G = 15 dB)',
+      z0: '50',
+      gainDbList: '0, 1, 2',
+      s11Mag: '0.707',
+      s11Ang: '-155',
+      s21Mag: '4',
+      s21Ang: '180',
+      s22Mag: '0.51',
+      s22Ang: '-20',
+    ),
+    const GainCircleExamplePreset(
+      name: 'Example 4-9 (1 GHz, Unilateral, G = 16 dB)',
+      z0: '50',
+      gainDbList: '0, 1, 2',
+      s11Mag: '0.707',
+      s11Ang: '-155',
+      s21Mag: '5',
+      s21Ang: '180',
+      s22Mag: '0.51',
+      s22Ang: '-20',
+    ),
+    const GainCircleExamplePreset(
       name: 'Normal Passive Ports (|S11|,|S22| small)',
       z0: '50',
       gainDbList: '6, 4, 2, 0, -2',
@@ -217,6 +239,23 @@ class _GainCirclePageState extends State<GainCirclePage> {
   void _nextExampleAndRecalculate() {
     setState(() {
       _exampleIndex = (_exampleIndex + 1) % _examples.length;
+
+      _hasCalculated = false;
+      _errorMessage = null;
+      _s11 = null;
+      _s21 = null;
+      _s22 = null;
+      _targetGains = null;
+
+      _applyExample(_examples[_exampleIndex]);
+    });
+
+    _onCalculatePressed();
+  }
+
+  void _previousExampleAndRecalculate() {
+    setState(() {
+      _exampleIndex = (_exampleIndex - 1 + _examples.length) % _examples.length;
 
       _hasCalculated = false;
       _errorMessage = null;
@@ -545,8 +584,22 @@ class _GainCirclePageState extends State<GainCirclePage> {
                         ),
                         const SizedBox(width: 10),
                         ElevatedButton.icon(
+                          onPressed: _previousExampleAndRecalculate,
+                          icon: const Icon(Icons.chevron_left),
+                          label: const Text('Previous Example'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.deepPurple,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          ),
+                        ),
+
+                        const SizedBox(width: 10),
+
+                        ElevatedButton.icon(
                           onPressed: _nextExampleAndRecalculate,
-                          icon: const Icon(Icons.loop),
+                          icon: const Icon(Icons.chevron_right),
                           label: const Text('Next Example'),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.deepPurple,
