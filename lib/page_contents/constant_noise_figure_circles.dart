@@ -427,6 +427,14 @@ class _ConstantNoiseFigureCirclesPageState
 
       _syncOtherSideFromCurrentSide();
     });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (_formKey.currentState?.validate() ?? false) {
+        _onCalculatePressed();
+      } else {
+        _showFormErrorSnackBar();
+      }
+    });
   }
 
   void _nextExample() {
