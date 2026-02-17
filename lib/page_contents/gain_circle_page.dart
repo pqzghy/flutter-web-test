@@ -48,15 +48,12 @@ class _GainCirclePageState extends State<GainCirclePage> {
 
   ComplexInputFormat _currentFormat = ComplexInputFormat.polarDegree;
 
-  // 默认值 (Unilateral Case Example)
   final s11C1 = TextEditingController(text: '0.8');
   final s11C2 = TextEditingController(text: '-80');
   final s21C1 = TextEditingController(text: '2');
   final s21C2 = TextEditingController(text: '0');
   final s22C1 = TextEditingController(text: '0.8');
   final s22C2 = TextEditingController(text: '-80');
-
-  // S12: 锁定为 0
   final s12C1 = TextEditingController(text: '0');
   final s12C2 = TextEditingController(text: '0');
 

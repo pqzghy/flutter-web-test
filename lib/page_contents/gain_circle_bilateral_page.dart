@@ -162,7 +162,6 @@ class _GainCircleBilateralPageState extends State<GainCircleBilateralPage> {
         gainDbList: '6, 10, 14',
       ),
 
-      // ======= Your original examples =======
       GainCircleExample(
         name: 'Example 4-4 (1.8 GHz, Bilateral)',
         s11Mag: 0.26,
@@ -451,7 +450,7 @@ class _GainCircleBilateralPageState extends State<GainCircleBilateralPage> {
       ),
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final isNarrow = constraints.maxWidth < 620; // 想更早/更晚换行就调这个阈值
+          final isNarrow = constraints.maxWidth < 620;
 
           final title = RichText(
             softWrap: true,
@@ -754,7 +753,6 @@ class _GainCircleBilateralPageState extends State<GainCircleBilateralPage> {
             content: [
               _text('We classify the device into three teaching cases:', bold: true),
 
-              // 使用 LaTeX 渲染分类标准
               _texScroll(r'\bullet\ \text{Case A: } K > 1 \text{ and } |\Delta| < 1 \to \text{Unconditionally stable}'),
               _texScroll(r'\bullet\ \text{Case B: } K > 1 \text{ and } |\Delta| > 1 \to \text{Potentially unstable}'),
               _texScroll(r'\bullet\ \text{Case C: } K \le 1 \to \text{Potentially unstable}'),
@@ -1603,7 +1601,6 @@ class _GainCircleBilateralPageState extends State<GainCircleBilateralPage> {
               TextFormField(
                 controller: gainDbListC,
                 validator: (val) => (val == null || val.isEmpty) ? 'Required' : null,
-                // Last field: Action is Done
                 textInputAction: TextInputAction.done,
                 onChanged: (_) => _onInputChanged(),
                 onFieldSubmitted: (_) => _onCalculatePressed(),

@@ -9,7 +9,7 @@ import '../input_and_output_functions/utils.dart';
 import '../functional_components/fixed_input.dart';
 import '../functional_components/menu_functions.dart';
 
-// 史密斯图与稳定性判断相关模块
+// 史密斯图与稳定性判断模块
 import '../simple_smith_chart_stability_judgment_module/smith_chart_widget.dart';
 import '../simple_smith_chart_stability_judgment_module/stability_circle_calculator.dart';
 import '../simple_smith_chart_stability_judgment_module/stability_region_detector.dart';
