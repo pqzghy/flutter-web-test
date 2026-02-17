@@ -454,9 +454,10 @@ class _GainCircleBilateralPageState extends State<GainCircleBilateralPage> {
           final isNarrow = constraints.maxWidth < 620; // 想更早/更晚换行就调这个阈值
 
           final title = RichText(
-            overflow: TextOverflow.ellipsis,
+            softWrap: true,
+            overflow: TextOverflow.visible,
             text: TextSpan(
-              style: const TextStyle(fontSize: 14, color: Colors.black87),
+              style: const TextStyle(fontSize: 14, color: Colors.black87, height: 1.25),
               children: [
                 const TextSpan(
                   text: 'Current Example: ',

@@ -1428,7 +1428,15 @@ class _ConstantNoiseFigureCirclesPageState
           alignment: Alignment.centerLeft,
           child: Text(
             ex.subtitle,
-            style: const TextStyle(fontSize: 12, color: Colors.black54),
+            softWrap: true,
+            maxLines: null,
+            overflow: TextOverflow.visible,
+            textAlign: TextAlign.left,
+            style: const TextStyle(
+              fontSize: 12,
+              color: Colors.black54,
+              height: 1.35,
+            ),
           ),
         ),
         const SizedBox(height: 10),
