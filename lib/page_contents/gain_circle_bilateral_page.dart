@@ -449,29 +449,29 @@ class _GainCircleBilateralPageState extends State<GainCircleBilateralPage> {
         borderRadius: BorderRadius.circular(10),
         border: Border.all(color: Colors.grey.shade300),
       ),
-      child: Row(
-        children: [
-          Expanded(
-            child: RichText(
-              overflow: TextOverflow.ellipsis,
-              text: TextSpan(
-                style: const TextStyle(fontSize: 14, color: Colors.black87),
-                children: [
-                  const TextSpan(
-                    text: 'Current Example: ',
-                    style: TextStyle(fontWeight: FontWeight.w600),
-                  ),
-                  TextSpan(text: ex.name),
-                  TextSpan(
-                    text: '  (${_exampleIndex + 1}/${_examples.length})',
-                    style: const TextStyle(color: Colors.black54),
-                  ),
-                ],
-              ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final isNarrow = constraints.maxWidth < 620; // 想更早/更晚换行就调这个阈值
+
+          final title = RichText(
+            overflow: TextOverflow.ellipsis,
+            text: TextSpan(
+              style: const TextStyle(fontSize: 14, color: Colors.black87),
+              children: [
+                const TextSpan(
+                  text: 'Current Example: ',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
+                TextSpan(text: ex.name),
+                TextSpan(
+                  text: '  (${_exampleIndex + 1}/${_examples.length})',
+                  style: const TextStyle(color: Colors.black54),
+                ),
+              ],
             ),
-          ),
-          const SizedBox(width: 12),
-          ElevatedButton.icon(
+          );
+
+          final prevBtn = ElevatedButton.icon(
             onPressed: _prevExample,
             icon: const Icon(Icons.chevron_left),
             label: const Text('Previous Example'),
@@ -482,9 +482,9 @@ class _GainCircleBilateralPageState extends State<GainCircleBilateralPage> {
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
             ),
-          ),
-          const SizedBox(width: 10),
-          ElevatedButton.icon(
+          );
+
+          final nextBtn = ElevatedButton.icon(
             onPressed: _nextExample,
             icon: const Icon(Icons.chevron_right),
             label: const Text('Next Example'),
@@ -495,11 +495,37 @@ class _GainCircleBilateralPageState extends State<GainCircleBilateralPage> {
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
             ),
-          ),
-        ],
+          );
+
+          if (!isNarrow) {
+            return Row(
+              children: [
+                Expanded(child: title),
+                const SizedBox(width: 12),
+                prevBtn,
+                const SizedBox(width: 10),
+                nextBtn,
+              ],
+            );
+          }
+
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              title,
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: [prevBtn, nextBtn],
+              ),
+            ],
+          );
+        },
       ),
     );
   }
+
 
   String _escapeLatexText(String s) {
     return s

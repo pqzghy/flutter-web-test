@@ -21,8 +21,6 @@ class NoiseCircleExample {
 
   final SourceLoadInputMode mode;
   final ComplexInputFormat preferredFormat;
-
-  // ✅ CHANGED: allow blank example value for Z0
   final double? z0;
   final double fminDb;
   final double rnOhm;
@@ -46,7 +44,6 @@ class NoiseCircleExample {
     required this.subtitle,
     required this.mode,
     required this.preferredFormat,
-    // ✅ CHANGED: not required
     this.z0,
     required this.fminDb,
     required this.rnOhm,
@@ -318,7 +315,6 @@ class _ConstantNoiseFigureCirclesPageState
   double _parseZ0() {
     final raw = z0C.text.trim();
 
-    // ✅ leave blank => default 50 (no warning)
     if (raw.isEmpty) return 50.0;
 
     final z0 = double.tryParse(raw);
@@ -445,7 +441,6 @@ class _ConstantNoiseFigureCirclesPageState
 
       _currentFormat = ex.preferredFormat;
 
-      // ✅ CHANGED: null => blank
       z0C.text = (ex.z0 == null)
           ? ''
           : ComplexFormatter.smartFormat(ex.z0!, precision: 6);
@@ -954,7 +949,6 @@ class _ConstantNoiseFigureCirclesPageState
       if (mag < 0) return 'Mag must be ≥ 0';
     }
 
-    // ✅ CHANGED: if Z0 blank => treat as 50 for validator too
     final z0 = double.tryParse(z0C.text.trim()) ?? 50.0;
     if (z0.isFinite && z0 > 0) {
       final z = _parseComplex(c1, c2);
@@ -1328,20 +1322,18 @@ class _ConstantNoiseFigureCirclesPageState
           ),
         ),
 
-        // example row + prev/next buttons
-        Row(
-          children: [
-            Expanded(
-              child: _latexTitle(
-                "Current Example: ${ex.title}  (${_exampleIndex + 1}/${_examples.length})",
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-                color: Colors.black87,
-              ),
-            ),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final isNarrow = constraints.maxWidth < 650;
 
-            // Previous Example (same style)
-            ElevatedButton.icon(
+            final titleWidget = _latexTitle(
+              "Current Example: ${ex.title}  (${_exampleIndex + 1}/${_examples.length})",
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+              color: Colors.black87,
+            );
+
+            final prevBtn = ElevatedButton.icon(
               onPressed: _prevExample,
               icon: const Icon(Icons.chevron_left),
               label: _latexTitle(
@@ -1357,12 +1349,9 @@ class _ConstantNoiseFigureCirclesPageState
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                 elevation: 2,
               ),
-            ),
+            );
 
-            const SizedBox(width: 10),
-
-            // Next Example (original)
-            ElevatedButton.icon(
+            final nextBtn = ElevatedButton.icon(
               onPressed: _nextExample,
               icon: const Icon(Icons.chevron_right),
               label: _latexTitle(
@@ -1378,8 +1367,35 @@ class _ConstantNoiseFigureCirclesPageState
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                 elevation: 2,
               ),
-            ),
-          ],
+            );
+
+            if (!isNarrow) {
+              // Wide layout: title left, buttons right
+              return Row(
+                children: [
+                  Expanded(child: titleWidget),
+                  const SizedBox(width: 10),
+                  prevBtn,
+                  const SizedBox(width: 10),
+                  nextBtn,
+                ],
+              );
+            }
+
+            // Narrow layout: title on top, buttons wrap below
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                titleWidget,
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: [prevBtn, nextBtn],
+                ),
+              ],
+            );
+          },
         ),
 
         const SizedBox(height: 6),

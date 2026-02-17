@@ -581,16 +581,18 @@ class _GainCirclePageState extends State<GainCirclePage> {
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                   child: Padding(
                     padding: const EdgeInsets.all(12),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            'Current Example: ${ex.name}  (${_exampleIndex + 1}/${_examples.length})',
-                            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        ElevatedButton.icon(
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        final isNarrow = constraints.maxWidth < 520; // 阈值
+
+                        final titleWidget = Text(
+                          'Current Example: ${ex.name}  (${_exampleIndex + 1}/${_examples.length})',
+                          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                          maxLines: isNarrow ? 2 : 1,
+                          overflow: TextOverflow.ellipsis,
+                        );
+
+                        final prevBtn = ElevatedButton.icon(
                           onPressed: _previousExampleAndRecalculate,
                           icon: const Icon(Icons.chevron_left),
                           label: const Text('Previous Example'),
@@ -600,11 +602,9 @@ class _GainCirclePageState extends State<GainCirclePage> {
                             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                           ),
-                        ),
+                        );
 
-                        const SizedBox(width: 10),
-
-                        ElevatedButton.icon(
+                        final nextBtn = ElevatedButton.icon(
                           onPressed: _nextExampleAndRecalculate,
                           icon: const Icon(Icons.chevron_right),
                           label: const Text('Next Example'),
@@ -614,8 +614,33 @@ class _GainCirclePageState extends State<GainCirclePage> {
                             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                           ),
-                        ),
-                      ],
+                        );
+
+                        if (!isNarrow) {
+                          return Row(
+                            children: [
+                              Expanded(child: titleWidget),
+                              const SizedBox(width: 10),
+                              prevBtn,
+                              const SizedBox(width: 10),
+                              nextBtn,
+                            ],
+                          );
+                        }
+
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            titleWidget,
+                            const SizedBox(height: 10),
+                            Wrap(
+                              spacing: 10,
+                              runSpacing: 10,
+                              children: [prevBtn, nextBtn],
+                            ),
+                          ],
+                        );
+                      },
                     ),
                   ),
                 ),
