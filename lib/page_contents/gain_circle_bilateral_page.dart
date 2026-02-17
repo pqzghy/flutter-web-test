@@ -25,8 +25,7 @@ class GainCircleExample {
   final double s12Mag, s12AngDeg;
   final double s21Mag, s21AngDeg;
   final double s22Mag, s22AngDeg;
-
-  final double z0;
+  final double? z0;
   final String gainDbList; // e.g. "6, 8, 10"
 
   const GainCircleExample({
@@ -39,7 +38,7 @@ class GainCircleExample {
     required this.s21AngDeg,
     required this.s22Mag,
     required this.s22AngDeg,
-    this.z0 = 50,
+    this.z0,
     this.gainDbList = '6, 8, 10',
   });
 
@@ -104,6 +103,9 @@ class _GainCircleBilateralPageState extends State<GainCircleBilateralPage> {
   final List<GainCircleData> gainCirclesData = [];
   bool _isUnconditionallyStable = false;
 
+  double _z0Used = 50.0;
+  bool _z0UsedDefault = true;
+
   // Teaching case selection
   BilateralCase _case = BilateralCase.c;
   late CaseInfo _caseInfo;
@@ -130,7 +132,7 @@ class _GainCircleBilateralPageState extends State<GainCircleBilateralPage> {
         s21AngDeg: -154.65892070881674,
         s22Mag: 0.5112905094584991,
         s22AngDeg: 165.3928323974535,
-        z0: 50,
+        z0: null,
         gainDbList: '6, 8, 10',
       ),
       GainCircleExample(
@@ -143,7 +145,7 @@ class _GainCircleBilateralPageState extends State<GainCircleBilateralPage> {
         s21AngDeg: 143.60729164623066,
         s22Mag: 0.3044388976539827,
         s22AngDeg: 10.154204316002625,
-        z0: 50,
+        z0: null,
         gainDbList: '6, 9, 12',
       ),
       GainCircleExample(
@@ -156,63 +158,87 @@ class _GainCircleBilateralPageState extends State<GainCircleBilateralPage> {
         s21AngDeg: 17.87816867473057,
         s22Mag: 0.24103238131579793,
         s22AngDeg: -32.223912896382245,
-        z0: 50,
+        z0: null,
         gainDbList: '6, 10, 14',
       ),
 
       // ======= Your original examples =======
       GainCircleExample(
         name: 'Example 4-4 (1.8 GHz, Bilateral)',
-        s11Mag: 0.26, s11AngDeg: -55,
-        s12Mag: 0.08, s12AngDeg: 80,
-        s21Mag: 2.14, s21AngDeg: 65,
-        s22Mag: 0.82, s22AngDeg: -30,
+        s11Mag: 0.26,
+        s11AngDeg: -55,
+        s12Mag: 0.08,
+        s12AngDeg: 80,
+        s21Mag: 2.14,
+        s21AngDeg: 65,
+        s22Mag: 0.82,
+        s22AngDeg: -30,
         z0: 50,
         gainDbList: '6, 8, 10',
       ),
       GainCircleExample(
         name: 'Example 4-5 (8 GHz, Bilateral)',
-        s11Mag: 0.5, s11AngDeg: -180,
-        s12Mag: 0.08, s12AngDeg: 30,
-        s21Mag: 2.5, s21AngDeg: 70,
-        s22Mag: 0.8, s22AngDeg: -100,
+        s11Mag: 0.5,
+        s11AngDeg: -180,
+        s12Mag: 0.08,
+        s12AngDeg: 30,
+        s21Mag: 2.5,
+        s21AngDeg: 70,
+        s22Mag: 0.8,
+        s22AngDeg: -100,
         z0: 50,
         gainDbList: '10',
       ),
       GainCircleExample(
         name: 'Example 4-8 (9 GHz, Bilateral)',
-        s11Mag: 0.55, s11AngDeg: -150,
-        s12Mag: 0.04, s12AngDeg: 20,
-        s21Mag: 2.82, s21AngDeg: 180,
-        s22Mag: 0.45, s22AngDeg: -30,
+        s11Mag: 0.55,
+        s11AngDeg: -150,
+        s12Mag: 0.04,
+        s12AngDeg: 20,
+        s21Mag: 2.82,
+        s21AngDeg: 180,
+        s22Mag: 0.45,
+        s22AngDeg: -30,
         z0: 50,
         gainDbList: '1,1.5',
       ),
       GainCircleExample(
         name: 'Example (Pozar 11.4 style)',
-        s11Mag: 0.6, s11AngDeg: -60,
-        s12Mag: 0.05, s12AngDeg: 26,
-        s21Mag: 1.9, s21AngDeg: 81,
-        s22Mag: 0.5, s22AngDeg: -60,
-        z0: 50,
+        s11Mag: 0.6,
+        s11AngDeg: -60,
+        s12Mag: 0.05,
+        s12AngDeg: 26,
+        s21Mag: 1.9,
+        s21AngDeg: 81,
+        s22Mag: 0.5,
+        s22AngDeg: -60,
+        z0: null,
         gainDbList: '6, 8, 10',
       ),
       GainCircleExample(
         name: 'Extra Example (Low feedback)',
-        s11Mag: 0.35, s11AngDeg: -20,
-        s12Mag: 0.02, s12AngDeg: 110,
-        s21Mag: 3.2, s21AngDeg: 40,
-        s22Mag: 0.55, s22AngDeg: -75,
-        z0: 50,
+        s11Mag: 0.35,
+        s11AngDeg: -20,
+        s12Mag: 0.02,
+        s12AngDeg: 110,
+        s21Mag: 3.2,
+        s21AngDeg: 40,
+        s22Mag: 0.55,
+        s22AngDeg: -75,
+        z0: null,
         gainDbList: '5, 8, 11',
       ),
       GainCircleExample(
         name: 'Extra Example (Potentially Unstable)',
-        s11Mag: 0.85, s11AngDeg: -160,
-        s12Mag: 0.12, s12AngDeg: 60,
-        s21Mag: 1.8, s21AngDeg: 25,
-        s22Mag: 0.9, s22AngDeg: -120,
-        z0: 50,
+        s11Mag: 0.85,
+        s11AngDeg: -160,
+        s12Mag: 0.12,
+        s12AngDeg: 60,
+        s21Mag: 1.8,
+        s21AngDeg: 25,
+        s22Mag: 0.9,
+        s22AngDeg: -120,
+        z0: null,
         gainDbList: '3, 6, 9',
       ),
     ];
@@ -283,7 +309,10 @@ class _GainCircleBilateralPageState extends State<GainCircleBilateralPage> {
       _setComplexControllers(s21C1, s21C2, ex.S21);
       _setComplexControllers(s22C1, s22C2, ex.S22);
 
-      z0C.text = ComplexFormatter.smartFormat(ex.z0, useScientific: false, precision: 6);
+      z0C.text = (ex.z0 == null)
+          ? ''
+          : ComplexFormatter.smartFormat(ex.z0!, useScientific: false, precision: 6);
+
       gainDbListC.text = ex.gainDbList;
 
       _hasCalculated = false;
@@ -441,9 +470,7 @@ class _GainCircleBilateralPageState extends State<GainCircleBilateralPage> {
               ),
             ),
           ),
-
           const SizedBox(width: 12),
-
           ElevatedButton.icon(
             onPressed: _prevExample,
             icon: const Icon(Icons.chevron_left),
@@ -456,9 +483,7 @@ class _GainCircleBilateralPageState extends State<GainCircleBilateralPage> {
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
             ),
           ),
-
           const SizedBox(width: 10),
-
           ElevatedButton.icon(
             onPressed: _nextExample,
             icon: const Icon(Icons.chevron_right),
@@ -634,6 +659,11 @@ class _GainCircleBilateralPageState extends State<GainCircleBilateralPage> {
         final S21 = ComplexParser.parseUniversal(_joinInput(s21C1, s21C2), _currentFormat);
         final S22 = ComplexParser.parseUniversal(_joinInput(s22C1, s22C2), _currentFormat);
 
+        final z0Text = z0C.text.trim();
+        final z0Used = (z0Text.isEmpty) ? 50.0 : double.parse(z0Text);
+        _z0Used = z0Used;
+        _z0UsedDefault = z0Text.isEmpty;
+
         final S11abs = S11.modulus, S11abs2 = S11abs * S11abs;
         final S12abs = S12.modulus;
         final S21abs = S21.modulus, S21abs2 = S21abs * S21abs;
@@ -718,12 +748,13 @@ class _GainCircleBilateralPageState extends State<GainCircleBilateralPage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                        _caseInfo.title,
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.blueAccent)
+                      _caseInfo.title,
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.blueAccent),
                     ),
                     const SizedBox(height: 8),
 
-                    const Text("Condition:", style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Colors.black54)),
+                    const Text("Condition:",
+                        style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Colors.black54)),
                     // 渲染 rule
                     SingleChildScrollView(
                       scrollDirection: Axis.horizontal,
@@ -731,19 +762,23 @@ class _GainCircleBilateralPageState extends State<GainCircleBilateralPage> {
                     ),
                     const SizedBox(height: 8),
 
-                    const Text("Max Gain Strategy:", style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Colors.black54)),
+                    const Text("Max Gain Strategy:",
+                        style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Colors.black54)),
                     // 渲染 maxGainRule
                     SingleChildScrollView(
                       scrollDirection: Axis.horizontal,
-                      child: Math.tex(_caseInfo.maxGainRule, textStyle: const TextStyle(fontSize: 15, color: Colors.black87)),
+                      child:
+                      Math.tex(_caseInfo.maxGainRule, textStyle: const TextStyle(fontSize: 15, color: Colors.black87)),
                     ),
                     const SizedBox(height: 8),
 
-                    const Text("Conjugate Match Strategy:", style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Colors.black54)),
+                    const Text("Conjugate Match Strategy:",
+                        style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Colors.black54)),
                     // 渲染 conjMatchRule
                     SingleChildScrollView(
                       scrollDirection: Axis.horizontal,
-                      child: Math.tex(_caseInfo.conjMatchRule, textStyle: const TextStyle(fontSize: 15, color: Colors.black87)),
+                      child:
+                      Math.tex(_caseInfo.conjMatchRule, textStyle: const TextStyle(fontSize: 15, color: Colors.black87)),
                     ),
                   ],
                 ),
@@ -759,52 +794,90 @@ class _GainCircleBilateralPageState extends State<GainCircleBilateralPage> {
               _text('Core Definitions:', bold: true),
               _texScroll(r'\Delta = S_{11}S_{22}-S_{12}S_{21}'),
               _texScroll(r'K = \frac{1-|S_{11}|^2-|S_{22}|^2+|\Delta|^2}{2|S_{12}S_{21}|}'),
-              _texScroll(
-                  r'K_t = \frac{3-2|S_{11}|^2-2|S_{22}|^2+|\Delta|^2-|1-\Delta|^2}{4|S_{12}S_{21}|}'),
-              _texScroll(
-                  r'\mu = \frac{1-|S_{11}|^2}{|S_{22}-\Delta S_{11}^*|+|S_{12}S_{21}|}'),
-              _texScroll(
-                  r"\mu' = \frac{1-|S_{22}|^2}{|S_{11}-\Delta S_{22}^*|+|S_{12}S_{21}|}"),
+              _texScroll(r'K_t = \frac{3-2|S_{11}|^2-2|S_{22}|^2+|\Delta|^2-|1-\Delta|^2}{4|S_{12}S_{21}|}'),
+              _texScroll(r'\mu = \frac{1-|S_{11}|^2}{|S_{22}-\Delta S_{11}^*|+|S_{12}S_{21}|}'),
+              _texScroll(r"\mu' = \frac{1-|S_{22}|^2}{|S_{11}-\Delta S_{22}^*|+|S_{12}S_{21}|}"),
               const Divider(),
               _text('Substitution (insert values; not simplified):', bold: true),
               _texScroll(
-                r'S_{11}=' + ComplexFormatter.latex(S11, _currentFormat, precision: 3) +
-                    r',\; S_{12}=' + ComplexFormatter.latex(S12, _currentFormat, precision: 3) +
-                    r',\; S_{21}=' + ComplexFormatter.latex(S21, _currentFormat, precision: 3) +
-                    r',\; S_{22}=' + ComplexFormatter.latex(S22, _currentFormat, precision: 3),
+                r'S_{11}=' +
+                    ComplexFormatter.latex(S11, _currentFormat, precision: 3) +
+                    r',\; S_{12}=' +
+                    ComplexFormatter.latex(S12, _currentFormat, precision: 3) +
+                    r',\; S_{21}=' +
+                    ComplexFormatter.latex(S21, _currentFormat, precision: 3) +
+                    r',\; S_{22}=' +
+                    ComplexFormatter.latex(S22, _currentFormat, precision: 3),
               ),
               _texScroll(
                 r'\Delta = S_{11}S_{22}-S_{12}S_{21}'
-                r' = (' + ComplexFormatter.latex(S11, _currentFormat, precision: 3) + r')(' +
-                    ComplexFormatter.latex(S22, _currentFormat, precision: 3) + r') - (' +
-                    ComplexFormatter.latex(S12, _currentFormat, precision: 3) + r')(' +
-                    ComplexFormatter.latex(S21, _currentFormat, precision: 3) + r')',
+                r' = (' +
+                    ComplexFormatter.latex(S11, _currentFormat, precision: 3) +
+                    r')(' +
+                    ComplexFormatter.latex(S22, _currentFormat, precision: 3) +
+                    r') - (' +
+                    ComplexFormatter.latex(S12, _currentFormat, precision: 3) +
+                    r')(' +
+                    ComplexFormatter.latex(S21, _currentFormat, precision: 3) +
+                    r')',
               ),
               _texScroll(
                 r'K = \frac{1-|S_{11}|^2-|S_{22}|^2+|\Delta|^2}{2|S_{12}S_{21}|}'
-                r' = \frac{1-' + _texNumSafe(S11abs2) + r'-' + _texNumSafe(S22abs2) + r'+' + _texNumSafe(deltaAbs2) + r'}{2\cdot ' +
-                    _texNumSafe(S12abs) + r'\cdot ' + _texNumSafe(S21abs) + r'}',
+                r' = \frac{1-' +
+                    _texNumSafe(S11abs2) +
+                    r'-' +
+                    _texNumSafe(S22abs2) +
+                    r'+' +
+                    _texNumSafe(deltaAbs2) +
+                    r'}{2\cdot ' +
+                    _texNumSafe(S12abs) +
+                    r'\cdot ' +
+                    _texNumSafe(S21abs) +
+                    r'}',
               ),
               _texScroll(
                 r'K_t = \frac{3-2|S_{11}|^2-2|S_{22}|^2+|\Delta|^2-|1-\Delta|^2}{4|S_{12}S_{21}|}'
-                r' = \frac{3-2\cdot' + _texNumSafe(S11abs2) + r'-2\cdot' + _texNumSafe(S22abs2) + r'+' + _texNumSafe(deltaAbs2) + r'-' + _texNumSafe(oneMinusDeltaAbs2) + r'}{4\cdot ' +
-                    _texNumSafe(S12abs) + r'\cdot ' + _texNumSafe(S21abs) + r'}',
+                r' = \frac{3-2\cdot' +
+                    _texNumSafe(S11abs2) +
+                    r'-2\cdot' +
+                    _texNumSafe(S22abs2) +
+                    r'+' +
+                    _texNumSafe(deltaAbs2) +
+                    r'-' +
+                    _texNumSafe(oneMinusDeltaAbs2) +
+                    r'}{4\cdot ' +
+                    _texNumSafe(S12abs) +
+                    r'\cdot ' +
+                    _texNumSafe(S21abs) +
+                    r'}',
               ),
               _texScroll(
                 r'\mu = \frac{1-|S_{11}|^2}{|S_{22}-\Delta S_{11}^*|+|S_{12}S_{21}|}'
-                r' = \frac{1-' + _texNumSafe(S11abs2) + r'}{|'
-                    + ComplexFormatter.latex(S22, _currentFormat, precision: 3) + r'-('
-                    + ComplexFormatter.latex(delta, _currentFormat, precision: 3) + r')('
-                    + ComplexFormatter.latex(S11.conjugate(), _currentFormat, precision: 3) + r')| + '
-                    + _texNumSafe(absS12S21) + r'}',
+                r' = \frac{1-' +
+                    _texNumSafe(S11abs2) +
+                    r'}{|'
+                    '${ComplexFormatter.latex(S22, _currentFormat, precision: 3)}'
+                    r'-('
+                    '${ComplexFormatter.latex(delta, _currentFormat, precision: 3)}'
+                    r')('
+                    '${ComplexFormatter.latex(S11.conjugate(), _currentFormat, precision: 3)}'
+                    r')| + ' +
+                    _texNumSafe(absS12S21) +
+                    r'}',
               ),
               _texScroll(
                 r"\mu' = \frac{1-|S_{22}|^2}{|S_{11}-\Delta S_{22}^*|+|S_{12}S_{21}|}"
-                r" = \frac{1-" + _texNumSafe(S22abs2) + r"}{|"
-                    + ComplexFormatter.latex(S11, _currentFormat, precision: 3) + r"-("
-                    + ComplexFormatter.latex(delta, _currentFormat, precision: 3) + r")("
-                    + ComplexFormatter.latex(S22.conjugate(), _currentFormat, precision: 3) + r")| + "
-                    + _texNumSafe(absS12S21) + r"}",
+                r" = \frac{1-" +
+                    _texNumSafe(S22abs2) +
+                    r"}{|"
+                    '${ComplexFormatter.latex(S11, _currentFormat, precision: 3)}'
+                    r"-("
+                    '${ComplexFormatter.latex(delta, _currentFormat, precision: 3)}'
+                    r")("
+                    '${ComplexFormatter.latex(S22.conjugate(), _currentFormat, precision: 3)}'
+                    r")| + " +
+                    _texNumSafe(absS12S21) +
+                    r"}",
               ),
               const Divider(),
               _text('Substitution & Results:', bold: true),
@@ -834,7 +907,9 @@ class _GainCircleBilateralPageState extends State<GainCircleBilateralPage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      _isUnconditionallyStable ? "✅ Unconditionally Stable (by K & |Δ|)" : "⚠️ Not Unconditionally Stable (by K & |Δ|)",
+                      _isUnconditionallyStable
+                          ? "✅ Unconditionally Stable (by K & |Δ|)"
+                          : "⚠️ Not Unconditionally Stable (by K & |Δ|)",
                       style: TextStyle(
                         color: _isUnconditionallyStable ? Colors.green[800] : Colors.deepOrange[800],
                         fontWeight: FontWeight.bold,
@@ -889,7 +964,13 @@ class _GainCircleBilateralPageState extends State<GainCircleBilateralPage> {
                   _text('Substitution (insert values; not simplified):', bold: true),
                   _texScroll(
                     r'MAG = \frac{|S_{21}|^2}{(1-|S_{11}|^2)(1-|S_{22}|^2)}'
-                    r' = \frac{' + _texNumSafe(S21abs2) + r'}{(1-' + _texNumSafe(S11abs2) + r')(1-' + _texNumSafe(S22abs2) + r')}',
+                    r' = \frac{' +
+                        _texNumSafe(S21abs2) +
+                        r'}{(1-' +
+                        _texNumSafe(S11abs2) +
+                        r')(1-' +
+                        _texNumSafe(S22abs2) +
+                        r')}',
                   ),
                   const Divider(),
                   _text('Result:', bold: true),
@@ -916,11 +997,21 @@ class _GainCircleBilateralPageState extends State<GainCircleBilateralPage> {
                   const Divider(),
                   _text('Substitution (insert values; not simplified):', bold: true),
                   _texScroll(
-                    r'MSG = \frac{|S_{21}|}{|S_{12}|} = \frac{' + _texNumSafe(S21abs) + r'}{' + _texNumSafe(S12abs) + r'}',
+                    r'MSG = \frac{|S_{21}|}{|S_{12}|} = \frac{' +
+                        _texNumSafe(S21abs) +
+                        r'}{' +
+                        _texNumSafe(S12abs) +
+                        r'}',
                   ),
                   _texScroll(
                     r'MAG = MSG\cdot\left(K-\sqrt{K^2-1}\right)'
-                    r' = (' + _texNumSafe(msgLin!) + r')\cdot\left(' + _texNumSafe(K) + r'-\sqrt{(' + _texNumSafe(K) + r')^2-1}\right)',
+                    r' = (' +
+                        _texNumSafe(msgLin!) +
+                        r')\cdot\left(' +
+                        _texNumSafe(K) +
+                        r'-\sqrt{(' +
+                        _texNumSafe(K) +
+                        r')^2-1}\right)',
                   ),
                   const Divider(),
                   _text('Results:', bold: true),
@@ -1095,7 +1186,12 @@ class _GainCircleBilateralPageState extends State<GainCircleBilateralPage> {
           final List<Widget> circleSteps = [];
           circleSteps.add(_text('1. Normalized Gain (gp):', bold: true));
           circleSteps.add(_texScroll(
-              r'g_p = \frac{10^{(' + _texNumSafe(currentGpDB) + r'/10)}}{|' + _texNumSafe(S21abs) + r'|^2} = ' + _texNumSafe(gp)));
+              r'g_p = \frac{10^{(' +
+                  _texNumSafe(currentGpDB) +
+                  r'/10)}}{|'
+                  '${_texNumSafe(S21abs)}'
+                  r'|^2} = ' +
+                  _texNumSafe(gp)));
           circleSteps.add(const Divider());
 
           circleSteps.add(_text('2. Center (Cp):', bold: true));
@@ -1114,7 +1210,8 @@ class _GainCircleBilateralPageState extends State<GainCircleBilateralPage> {
           circleSteps.add(_text('3. Radius (rp):', bold: true));
           circleSteps.add(_texScroll(
               r'r_p = \frac{\sqrt{1 - (1-|S_{11}|^2-|S_{22}|^2+|\Delta|^2)\,g_p + |S_{12}S_{21}|^2 g_p^2}}{|1 + g_p(|S_{22}|^2 - |\Delta|^2)|}'
-              r' = ' + _texNumSafe(rp)));
+              r' = ' +
+                  _texNumSafe(rp)));
 
           circleWidgets.add(
             Card(
@@ -1199,69 +1296,89 @@ class _GainCircleBilateralPageState extends State<GainCircleBilateralPage> {
               _text('Substitution (insert values; not simplified):', bold: true),
               _texScroll(
                 r'B_1 = 1 + |S_{11}|^2 - |S_{22}|^2 - |\Delta|^2'
-                r' = 1 + ' + _texNumSafe(S11abs2) + r' - ' + _texNumSafe(S22abs2) + r' - ' + _texNumSafe(deltaAbs2),
+                r' = 1 + ' +
+                    _texNumSafe(S11abs2) +
+                    r' - ' +
+                    _texNumSafe(S22abs2) +
+                    r' - ' +
+                    _texNumSafe(deltaAbs2),
               ),
               _texScroll(
                 r'B_2 = 1 + |S_{22}|^2 - |S_{11}|^2 - |\Delta|^2'
-                r' = 1 + ' + _texNumSafe(S22abs2) + r' - ' + _texNumSafe(S11abs2) + r' - ' + _texNumSafe(deltaAbs2),
+                r' = 1 + ' +
+                    _texNumSafe(S22abs2) +
+                    r' - ' +
+                    _texNumSafe(S11abs2) +
+                    r' - ' +
+                    _texNumSafe(deltaAbs2),
               ),
               _texScroll(
                 r'C_1 = S_{11} - \Delta S_{22}^*'
-                r' = (' + ComplexFormatter.latex(S11, _currentFormat, precision: 3) + r') - ('
-                    + ComplexFormatter.latex(delta, _currentFormat, precision: 3) + r')('
-                    + ComplexFormatter.latex(S22.conjugate(), _currentFormat, precision: 3) + r')',
+                r' = (' +
+                    ComplexFormatter.latex(S11, _currentFormat, precision: 3) +
+                    r') - (' +
+                    ComplexFormatter.latex(delta, _currentFormat, precision: 3) +
+                    r')(' +
+                    ComplexFormatter.latex(S22.conjugate(), _currentFormat, precision: 3) +
+                    r')',
               ),
               _texScroll(
                 r'C_2 = S_{22} - \Delta S_{11}^*'
-                r' = (' + ComplexFormatter.latex(S22, _currentFormat, precision: 3) + r') - ('
-                    + ComplexFormatter.latex(delta, _currentFormat, precision: 3) + r')('
-                    + ComplexFormatter.latex(S11.conjugate(), _currentFormat, precision: 3) + r')',
+                r' = (' +
+                    ComplexFormatter.latex(S22, _currentFormat, precision: 3) +
+                    r') - (' +
+                    ComplexFormatter.latex(delta, _currentFormat, precision: 3) +
+                    r')(' +
+                    ComplexFormatter.latex(S11.conjugate(), _currentFormat, precision: 3) +
+                    r')',
               ),
               _texScroll(
-                r'B_1^2 - 4|C_1|^2 = (' + _texNumSafe(B1) + r')^2 - 4\cdot(' + _texNumSafe(C1.modulus) + r')^2 = ' + _texNumSafe(discrim1),
+                r'B_1^2 - 4|C_1|^2 = (' +
+                    _texNumSafe(B1) +
+                    r')^2 - 4\cdot(' +
+                    _texNumSafe(C1.modulus) +
+                    r')^2 = ' +
+                    _texNumSafe(discrim1),
               ),
               _texScroll(
-                r'B_2^2 - 4|C_2|^2 = (' + _texNumSafe(B2) + r')^2 - 4\cdot(' + _texNumSafe(C2.modulus) + r')^2 = ' + _texNumSafe(discrim2),
+                r'B_2^2 - 4|C_2|^2 = (' +
+                    _texNumSafe(B2) +
+                    r')^2 - 4\cdot(' +
+                    _texNumSafe(C2.modulus) +
+                    r')^2 = ' +
+                    _texNumSafe(discrim2),
               ),
               const Divider(),
               _text('Computed Solutions (show both ±):', bold: true),
-              if (GmsMinus != null) _texScroll(r'\Gamma_{Ms-} = ' + ComplexFormatter.latex(GmsMinus, _currentFormat, precision: 3)),
-              if (GmsPlus != null) _texScroll(r'\Gamma_{Ms+} = ' + ComplexFormatter.latex(GmsPlus, _currentFormat, precision: 3)),
-              if (GmlMinus != null) _texScroll(r'\Gamma_{ML-} = ' + ComplexFormatter.latex(GmlMinus, _currentFormat, precision: 3)),
-              if (GmlPlus != null) _texScroll(r'\Gamma_{ML+} = ' + ComplexFormatter.latex(GmlPlus, _currentFormat, precision: 3)),
+              if (GmsMinus != null)
+                _texScroll(r'\Gamma_{Ms-} = ' + ComplexFormatter.latex(GmsMinus, _currentFormat, precision: 3)),
+              if (GmsPlus != null)
+                _texScroll(r'\Gamma_{Ms+} = ' + ComplexFormatter.latex(GmsPlus, _currentFormat, precision: 3)),
+              if (GmlMinus != null)
+                _texScroll(r'\Gamma_{ML-} = ' + ComplexFormatter.latex(GmlMinus, _currentFormat, precision: 3)),
+              if (GmlPlus != null)
+                _texScroll(r'\Gamma_{ML+} = ' + ComplexFormatter.latex(GmlPlus, _currentFormat, precision: 3)),
               const Divider(),
-
               _text('Chosen (ΓS, ΓL) by case:', bold: true),
-
-              // 1. Selection Rule in LaTeX
               _texScroll(r'\textbf{Selection Rule:}\quad ' + _caseInfo.conjMatchRule),
-
-              // 2. Gamma S in LaTeX
               if (chosenGs != null)
                 _texScroll(r'\Gamma_S = ' + ComplexFormatter.latex(chosenGs, _currentFormat, precision: 3))
               else
                 _texScroll(r'\Gamma_S: \text{undefined } (|2C_1| \approx 0)'),
-
-              // 3. Gamma L in LaTeX
               if (chosenGl != null)
                 _texScroll(r'\Gamma_L = ' + ComplexFormatter.latex(chosenGl, _currentFormat, precision: 3))
               else
                 _texScroll(r'\Gamma_L: \text{undefined } (|2C_2| \approx 0)'),
-
               const Divider(),
-
-              // 4. Notes in LaTeX (FIXED: Using list spread to avoid '\\' newline crash)
               if (_case == BilateralCase.c) ...[
                 _texScroll(r'\textbf{Note (Case C):}\ K \le 1 \implies \text{Match not guaranteed.}'),
                 _texScroll(r'\text{Showing } \Gamma_{Ms\pm}/\Gamma_{ML\pm} \text{ for teaching reference.}'),
                 _texScroll(r'\text{Prefer passive solutions } (|\Gamma|<1) \text{ if available.}'),
               ],
-
               if (_case == BilateralCase.b) ...[
                 _texScroll(r'\textbf{Note (Case B):}\ K > 1 \text{ and } |\Delta| > 1 \implies \text{Use (+) sign.}'),
                 _texScroll(r'\text{However, do NOT claim } G_{max} \text{ (potential instability).}'),
               ],
-
               if (_case == BilateralCase.a) ...[
                 _texScroll(r'\textbf{Note (Case A):}\ \text{Unconditionally stable} \implies \text{Use (-) sign.}'),
                 _texScroll(r'\text{Must use } \Gamma_S = \Gamma_{Ms-},\; \Gamma_L = \Gamma_{ML-}.'),
@@ -1356,7 +1473,8 @@ class _GainCircleBilateralPageState extends State<GainCircleBilateralPage> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text("Bilateral Mode", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black87)),
+                          const Text("Bilateral Mode",
+                              style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black87)),
                           const SizedBox(height: 4),
                           RichText(
                             text: TextSpan(
@@ -1440,10 +1558,15 @@ class _GainCircleBilateralPageState extends State<GainCircleBilateralPage> {
               ),
 
               const SizedBox(height: 12),
+
               _buildScalarInput(
                 z0C,
                 'Z0 (Ohm)',
-                validator: commonValidator,
+                validator: (val) {
+                  final s = (val ?? '').trim();
+                  if (s.isEmpty) return null;
+                  return commonValidator(val);
+                },
                 onAnyChanged: _onInputChanged,
                 onSubmit: _onCalculatePressed,
                 action: TextInputAction.next,
@@ -1483,6 +1606,23 @@ class _GainCircleBilateralPageState extends State<GainCircleBilateralPage> {
               const SizedBox(height: 24),
 
               if (_hasCalculated) ...[
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  margin: const EdgeInsets.only(bottom: 12),
+                  decoration: BoxDecoration(
+                    color: Colors.blue[50],
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.blue.shade200),
+                  ),
+                  child: Text(
+                    _z0UsedDefault
+                        ? "Z0 not provided → using default Z0 = 50 Ω"
+                        : "Z0 provided → using Z0 = ${ComplexFormatter.smartFormat(_z0Used, precision: 6)} Ω",
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                ),
+
                 if (gainCirclesData.isNotEmpty)
                   Container(
                     width: double.infinity,
@@ -1531,7 +1671,9 @@ class _GainCircleBilateralPageState extends State<GainCircleBilateralPage> {
                     final isErrorPanel = entry.value.title == "Calculation Error";
                     final headerColor = isErrorPanel
                         ? Colors.red
-                        : (entry.key < _expandedList.length && _expandedList[entry.key] ? Colors.deepPurple : Colors.black87);
+                        : (entry.key < _expandedList.length && _expandedList[entry.key]
+                        ? Colors.deepPurple
+                        : Colors.black87);
 
                     return ExpansionPanel(
                       headerBuilder: (context, isExpanded) => ListTile(

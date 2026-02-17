@@ -220,12 +220,14 @@ class AmplifierCalculator {
         titleLatex: r'1.\ \text{Reflection Coefficients}\ (\Gamma_S,\ \Gamma_L)',
         content: [
           _text('Calculate normalized reflection coefficients based on Zs, ZL, Z0.'),
-          _texScroll(r'Z_0 = ' + z0Str + r', \ \ \ Z_s = ' + zsStr + r', \ \ \ Z_L = ' + zlStr),
+          _texScroll(r'Z_0 = ' + z0Str + r', \ \ \ Z_S = ' + zsStr + r', \ \ \ Z_L = ' + zlStr),
           _text('Formula:', bold: true),
           _texScroll(r'\Gamma = \frac{Z - Z_0}{Z + Z_0}'),
+          _texScroll(r'\Gamma_S = \frac{Z_S - Z_0}{Z_S + Z_0}'),
+          _texScroll(r'\Gamma_L = \frac{Z_L - Z_0}{Z_L + Z_0}'),
           _text('Substitution:', bold: true),
           _texScroll(
-            r'\Gamma_s = \frac{' +
+            r'\Gamma_S = \frac{' +
                 zsStr +
                 '-' +
                 z0Str +
@@ -356,7 +358,6 @@ class AmplifierCalculator {
         ],
       ),
     );
-
 
     // Step 4: Power Gains (Gt, Gp, Ga)
     final double gsMagSq = pow(gammaS.modulus, 2).toDouble();
@@ -584,13 +585,11 @@ class AmplifierCalculator {
             ),
             const Divider(),
             _text('Reference Computations (still computed):', bold: true),
-
             _text('0) Determinant (Δ)', bold: true),
             _texScroll(r'\Delta = S_{11} S_{22} - S_{12} S_{21}'),
             _texScroll(r'\Delta = ' + _latexComplexSafe(delta, displayFormat)),
             _texScroll(r'|\Delta| = ' + _texNum(deltaAbs)),
             const Divider(),
-
             _text('1) Rollett Factor (K)', bold: true),
             _texScroll(r'K=\frac{1-|S_{11}|^2-|S_{22}|^2+|\Delta|^2}{2|S_{12}S_{21}|}'),
             _text('Substitution (only replace values, do not simplify):', bold: true),
@@ -612,7 +611,6 @@ class AmplifierCalculator {
               ),
             _text(stableByK ? '✓ (A) satisfied (numerically): K > 1 and |Δ| < 1' : '✗ (A) not satisfied (numerically)', bold: true),
             const Divider(),
-
             _text('2) Single-Parameter Stability Criterion (Kt)', bold: true),
             _texScroll(
               r'K_t=\frac{3-2|S_{11}|^2-2|S_{22}|^2+|\Delta|^2-\left|1-|\Delta|^2\right|}{4|S_{12}S_{21}|}',
@@ -636,7 +634,6 @@ class AmplifierCalculator {
               ),
             _text(stableByKt ? '✓ (B) satisfied (numerically): Kt > 1' : '✗ (B) not satisfied (numerically)', bold: true),
             const Divider(),
-
             _text('3) Geometric Stability Factor (μ)', bold: true),
             _texScroll(r'\mu=\frac{1-|S_{11}|^2}{|S_{22}-\Delta S_{11}^*|+|S_{12}S_{21}|}'),
             _text('Intermediate term (under current format):', bold: true),
@@ -670,7 +667,6 @@ class AmplifierCalculator {
             _text('Computed Result:', bold: true),
             _texScroll(r'\mu=\mathbf{' + _texNum(mu) + r'}'),
             const Divider(),
-
             _text("4) Geometric Stability Factor (μ')", bold: true),
             _texScroll(r"\mu^\prime=\frac{1-|S_{22}|^2}{|S_{11}-\Delta S_{22}^*|+|S_{12}S_{21}|}"),
             _text('Intermediate term (under current format):', bold: true),
@@ -703,7 +699,6 @@ class AmplifierCalculator {
             ),
             _text('Computed Result:', bold: true),
             _texScroll(r"\mu^\prime=\mathbf{" + _texNum(muPrime) + r"}"),
-
             const SizedBox(height: 8),
             _text(
               'Note: In unilateral cases, K/Kt can blow up to ±∞ because the denominator contains |S12·S21|. '
@@ -726,7 +721,6 @@ class AmplifierCalculator {
             _texScroll(r'\text{(B)}\;\;K_t>1'),
             _texScroll(r"\text{(C)}\;\;\mu>1 \ \text{and}\ \mu^\prime>1"),
             const SizedBox(height: 8),
-
             _text('0) Determinant (Δ)', bold: true),
             _texScroll(r'\Delta = S_{11}S_{22}-S_{12}S_{21}'),
             _text('Substitution (only replace values):', bold: true),
@@ -745,7 +739,6 @@ class AmplifierCalculator {
             _texScroll(r'\Delta=' + _latexComplexSafe(delta, displayFormat)),
             _texScroll(r'|\Delta|=' + _texNum(deltaAbs)),
             const Divider(),
-
             _text('1) Rollett Factor (K)', bold: true),
             _texScroll(r'K=\frac{1-|S_{11}|^2-|S_{22}|^2+|\Delta|^2}{2|S_{12}S_{21}|}'),
             _text('Substitution (only replace values, do not simplify):', bold: true),
@@ -763,7 +756,6 @@ class AmplifierCalculator {
             _texScroll(r'|\Delta|=\mathbf{' + _texNum(deltaAbs) + r'}'),
             _text(stableByK ? '✓ Condition (A) satisfied: K > 1 and |Δ| < 1' : '✗ Condition (A) not satisfied', bold: true),
             const Divider(),
-
             _text('2) Single-Parameter Stability Criterion (Kt)', bold: true),
             _texScroll(
               r'K_t=\frac{3-2|S_{11}|^2-2|S_{22}|^2+|\Delta|^2-\left|1-|\Delta|^2\right|}{4|S_{12}S_{21}|}',
@@ -782,7 +774,6 @@ class AmplifierCalculator {
             _texScroll(r'K_t=\mathbf{' + _texNum(kt) + r'}'),
             _text(stableByKt ? '✓ Condition (B) satisfied: Kt > 1' : '✗ Condition (B) not satisfied', bold: true),
             const Divider(),
-
             _text('3) Geometric Stability Factor (μ)', bold: true),
             _texScroll(r'\mu=\frac{1-|S_{11}|^2}{|S_{22}-\Delta S_{11}^*|+|S_{12}S_{21}|}'),
             _text('Intermediate term (under current format):', bold: true),
@@ -814,7 +805,6 @@ class AmplifierCalculator {
             _text('Computed Result:', bold: true),
             _texScroll(r'\mu=\mathbf{' + _texNum(mu) + r'}'),
             const Divider(),
-
             _text("4) Geometric Stability Factor (μ')", bold: true),
             _texScroll(r"\mu^\prime=\frac{1-|S_{22}|^2}{|S_{11}-\Delta S_{22}^*|+|S_{12}S_{21}|}"),
             _text('Intermediate term (under current format):', bold: true),
@@ -846,7 +836,6 @@ class AmplifierCalculator {
             _text('Computed Result:', bold: true),
             _texScroll(r"\mu^\prime=\mathbf{" + _texNum(muPrime) + r"}"),
             _text(stableByMu ? "✓ Condition (C) satisfied: μ > 1 and μ′ > 1" : "✗ Condition (C) not satisfied", bold: true),
-
             const SizedBox(height: 12),
             Container(
               padding: const EdgeInsets.all(12),
@@ -1003,6 +992,20 @@ class _AmplifierHomePageState extends State<AmplifierHomePage> {
     );
   }
 
+  // =================== NEW: optional validator (allow blank) ===================
+  String? _optionalNumberValidator(String? v) {
+    final s = (v ?? '').trim();
+    if (s.isEmpty) return null;
+    return commonValidator(v);
+  }
+
+  // =================== NEW: parse blank as default ===================
+  double _parseOrDefault(TextEditingController c, double def) {
+    final s = c.text.trim();
+    if (s.isEmpty) return def;
+    return double.tryParse(s) ?? def;
+  }
+
   double _safeDivD(double num, double den) {
     if (num.isNaN || den.isNaN) return double.nan;
 
@@ -1025,8 +1028,8 @@ class _AmplifierHomePageState extends State<AmplifierHomePage> {
       name: 'Example 4-1 (MESFET, 9 GHz)',
       freqGHz: '9',
       z0: '50',
-      zs: '50',
-      zl: '50',
+      zs: '',
+      zl: '',
       s11Mag: '0.894',
       s11Ang: '-60.6',
       s12Mag: '0.02',
@@ -1039,9 +1042,9 @@ class _AmplifierHomePageState extends State<AmplifierHomePage> {
     const ExamplePreset(
       name: 'Example 4-2 (Transistor, 9 GHz)',
       freqGHz: '9',
-      z0: '50',
-      zs: '50',
-      zl: '50',
+      z0: '',
+      zs: '',
+      zl: '',
       s11Mag: '0.65',
       s11Ang: '-95',
       s12Mag: '0.035',
@@ -1053,10 +1056,10 @@ class _AmplifierHomePageState extends State<AmplifierHomePage> {
     ),
     const ExamplePreset(
       name: 'Unilateral Test (S12 ≈ 0)',
-      freqGHz: '9',
-      z0: '50',
-      zs: '50',
-      zl: '50',
+      freqGHz: '',
+      z0: '',
+      zs: '',
+      zl: '',
       s11Mag: '0.75',
       s11Ang: '-30',
       s12Mag: '0.0',
@@ -1068,7 +1071,7 @@ class _AmplifierHomePageState extends State<AmplifierHomePage> {
     ),
     const ExamplePreset(
       name: 'Singularity Test (1 - S22·ΓL ≈ 0)',
-      freqGHz: '9',
+      freqGHz: '',
       z0: '50',
       zs: '50',
       zl: '1000000000',
@@ -1083,7 +1086,7 @@ class _AmplifierHomePageState extends State<AmplifierHomePage> {
     ),
     const ExamplePreset(
       name: 'Z Singularity Test (Zs + Z0 ≈ 0)',
-      freqGHz: '9',
+      freqGHz: '',
       z0: '50',
       zs: '-50',
       zl: '50',
@@ -1098,10 +1101,10 @@ class _AmplifierHomePageState extends State<AmplifierHomePage> {
     ),
     const ExamplePreset(
       name: 'Potentially Unstable (strong feedback)',
-      freqGHz: '9',
-      z0: '50',
-      zs: '50',
-      zl: '50',
+      freqGHz: '',
+      z0: '',
+      zs: '',
+      zl: '',
       s11Mag: '0.92',
       s11Ang: '-150',
       s12Mag: '0.18',
@@ -1246,9 +1249,9 @@ class _AmplifierHomePageState extends State<AmplifierHomePage> {
     final s21 = ComplexParser.parseUniversal(_joinInput(s21C1, s21C2), _currentFormat);
     final s22 = ComplexParser.parseUniversal(_joinInput(s22C1, s22C2), _currentFormat);
 
-    final z0 = double.tryParse(z0C.text) ?? 50.0;
-    final zs = double.tryParse(zsC.text) ?? 50.0;
-    final zl = double.tryParse(zlC.text) ?? 50.0;
+    final z0 = _parseOrDefault(z0C, 50.0);
+    final zs = _parseOrDefault(zsC, 50.0);
+    final zl = _parseOrDefault(zlC, 50.0);
 
     const double unilateralEps = 1e-9;
     final bool isUnilateral = (s12.modulus < unilateralEps || s21.modulus < unilateralEps);
@@ -1434,10 +1437,15 @@ class _AmplifierHomePageState extends State<AmplifierHomePage> {
     );
   }
 
-  Widget _buildScalarInput(TextEditingController controller, String label, {TextInputAction action = TextInputAction.next}) {
+  Widget _buildScalarInput(
+      TextEditingController controller,
+      String label, {
+        TextInputAction action = TextInputAction.next,
+        bool optional = false,
+      }) {
     return TextFormField(
       controller: controller,
-      validator: commonValidator,
+      validator: optional ? _optionalNumberValidator : commonValidator,
       keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true),
       textInputAction: action,
       onChanged: (_) => _scheduleAutoCalc(),
@@ -1515,16 +1523,18 @@ class _AmplifierHomePageState extends State<AmplifierHomePage> {
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                   child: Padding(
                     padding: const EdgeInsets.all(12),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            'Current Example: ${ex.name}  (${_exampleIndex + 1}/${_examples.length})',
-                            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        ElevatedButton.icon(
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        final isNarrow = constraints.maxWidth < 520; // 你可调：480/520/600
+
+                        final titleWidget = Text(
+                          'Current Example: ${ex.name}  (${_exampleIndex + 1}/${_examples.length})',
+                          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                          maxLines: isNarrow ? 2 : 1,
+                          overflow: TextOverflow.ellipsis,
+                        );
+
+                        final prevBtn = ElevatedButton.icon(
                           onPressed: _previousExampleAndRecalculate,
                           icon: const Icon(Icons.chevron_left),
                           label: const Text('Previous Example'),
@@ -1534,9 +1544,9 @@ class _AmplifierHomePageState extends State<AmplifierHomePage> {
                             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                           ),
-                        ),
-                        const SizedBox(width: 10),
-                        ElevatedButton.icon(
+                        );
+
+                        final nextBtn = ElevatedButton.icon(
                           onPressed: _nextExampleAndRecalculate,
                           icon: const Icon(Icons.chevron_right),
                           label: const Text('Next Example'),
@@ -1546,8 +1556,36 @@ class _AmplifierHomePageState extends State<AmplifierHomePage> {
                             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                           ),
-                        ),
-                      ],
+                        );
+
+                        if (!isNarrow) {
+                          return Row(
+                            children: [
+                              Expanded(child: titleWidget),
+                              const SizedBox(width: 10),
+                              prevBtn,
+                              const SizedBox(width: 10),
+                              nextBtn,
+                            ],
+                          );
+                        }
+
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            titleWidget,
+                            const SizedBox(height: 10),
+                            Wrap(
+                              spacing: 10,
+                              runSpacing: 10,
+                              children: [
+                                prevBtn,
+                                nextBtn,
+                              ],
+                            ),
+                          ],
+                        );
+                      },
                     ),
                   ),
                 ),
@@ -1604,17 +1642,17 @@ class _AmplifierHomePageState extends State<AmplifierHomePage> {
 
                 Row(
                   children: [
-                    Expanded(child: _buildScalarInput(freqController, 'Freq (GHz)')),
+                    Expanded(child: _buildScalarInput(freqController, 'Freq (GHz)', optional: true)),
                     const SizedBox(width: 12),
-                    Expanded(child: _buildScalarInput(z0C, 'Z0 (Ω)')),
+                    Expanded(child: _buildScalarInput(z0C, 'Z0 (Ω)', optional: true)),
                   ],
                 ),
                 const SizedBox(height: 12),
                 Row(
                   children: [
-                    Expanded(child: _buildScalarInput(zsC, 'Zs (Source)')),
+                    Expanded(child: _buildScalarInput(zsC, 'Zs (Source)', optional: true)),
                     const SizedBox(width: 12),
-                    Expanded(child: _buildScalarInput(zlC, 'Zl (Load)', action: TextInputAction.done)),
+                    Expanded(child: _buildScalarInput(zlC, 'Zl (Load)', action: TextInputAction.done, optional: true)),
                   ],
                 ),
 

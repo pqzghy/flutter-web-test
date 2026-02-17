@@ -22,7 +22,8 @@ class NoiseCircleExample {
   final SourceLoadInputMode mode;
   final ComplexInputFormat preferredFormat;
 
-  final double z0;
+  // ✅ CHANGED: allow blank example value for Z0
+  final double? z0;
   final double fminDb;
   final double rnOhm;
 
@@ -45,7 +46,8 @@ class NoiseCircleExample {
     required this.subtitle,
     required this.mode,
     required this.preferredFormat,
-    required this.z0,
+    // ✅ CHANGED: not required
+    this.z0,
     required this.fminDb,
     required this.rnOhm,
     required this.gammaOpt,
@@ -194,8 +196,7 @@ class _ConstantNoiseFigureCirclesPageState
     ),
     NoiseCircleExample(
       title: 'Example 4-9 (1 GHz, RF transistor)',
-      subtitle:
-      'Fmin=3 dB, Γopt=0.45∠180°, Rn=4 Ω, Z0=50 Ω, target F: 3.5 dB',
+      subtitle: 'Fmin=3 dB, Γopt=0.45∠180°, Rn=4 Ω, Z0=50 Ω, target F: 3.5 dB',
       mode: SourceLoadInputMode.gamma,
       preferredFormat: ComplexInputFormat.polarDegree,
       z0: 50,
@@ -208,13 +209,12 @@ class _ConstantNoiseFigureCirclesPageState
       zl: Complex(50, 0),
       fTargetsDb: const [3.5],
     ),
-
     NoiseCircleExample(
       title: 'Example A (Γs close to Γopt)',
       subtitle: 'NF should be close to Fmin when Γs ≈ Γopt',
       mode: SourceLoadInputMode.gamma,
       preferredFormat: ComplexInputFormat.polarDegree,
-      z0: 50,
+      z0: null,
       fminDb: 1.2,
       rnOhm: 3.0,
       gammaOpt: Complex.fromPolar(r: 0.35, theta: 120 * pi / 180),
@@ -229,7 +229,7 @@ class _ConstantNoiseFigureCirclesPageState
       subtitle: 'Increase Rn and see circles expand',
       mode: SourceLoadInputMode.gamma,
       preferredFormat: ComplexInputFormat.polarDegree,
-      z0: 50,
+      z0: null,
       fminDb: 2.0,
       rnOhm: 10.0,
       gammaOpt: Complex.fromPolar(r: 0.45, theta: 150 * pi / 180),
@@ -244,7 +244,7 @@ class _ConstantNoiseFigureCirclesPageState
       subtitle: 'Enter Zs/ZL and auto-convert to Γs/ΓL',
       mode: SourceLoadInputMode.impedance,
       preferredFormat: ComplexInputFormat.cartesian,
-      z0: 50,
+      z0: null,
       fminDb: 1.8,
       rnOhm: 5.0,
       gammaOpt: Complex.fromPolar(r: 0.40, theta: 135 * pi / 180),
@@ -262,10 +262,28 @@ class _ConstantNoiseFigureCirclesPageState
   void dispose() {
     _debounceTimer?.cancel();
     for (final c in [
-      s11C1, s11C2, s12C1, s12C2, s21C1, s21C2, s22C1, s22C2,
-      gammaOptC1, gammaOptC2, z0C, fminC, rnC, fListC,
-      gammaSC1, gammaSC2, gammaLC1, gammaLC2,
-      zSC1, zSC2, zLC1, zLC2,
+      s11C1,
+      s11C2,
+      s12C1,
+      s12C2,
+      s21C1,
+      s21C2,
+      s22C1,
+      s22C2,
+      gammaOptC1,
+      gammaOptC2,
+      z0C,
+      fminC,
+      rnC,
+      fListC,
+      gammaSC1,
+      gammaSC2,
+      gammaLC1,
+      gammaLC2,
+      zSC1,
+      zSC2,
+      zLC1,
+      zLC2,
     ]) {
       c.dispose();
     }
@@ -298,7 +316,14 @@ class _ConstantNoiseFigureCirclesPageState
   }
 
   double _parseZ0() {
-    final z0 = double.tryParse(z0C.text) ?? 50.0;
+    final raw = z0C.text.trim();
+
+    // ✅ leave blank => default 50 (no warning)
+    if (raw.isEmpty) return 50.0;
+
+    final z0 = double.tryParse(raw);
+    if (z0 == null) return 50.0;
+
     if (z0 <= 0 || z0.isNaN || z0.isInfinite) {
       _warn('Z0 must be positive. Fallback to 50 Ω.');
       return 50.0;
@@ -350,18 +375,30 @@ class _ConstantNoiseFigureCirclesPageState
     }
 
     if (fmt == ComplexInputFormat.cartesian) {
-      c1.text = ComplexFormatter.smartFormat(c.real,
-          useScientific: false, precision: 6);
-      c2.text = ComplexFormatter.smartFormat(c.imaginary,
-          useScientific: false, precision: 6);
+      c1.text = ComplexFormatter.smartFormat(
+        c.real,
+        useScientific: false,
+        precision: 6,
+      );
+      c2.text = ComplexFormatter.smartFormat(
+        c.imaginary,
+        useScientific: false,
+        precision: 6,
+      );
     } else {
-      c1.text = ComplexFormatter.smartFormat(c.modulus,
-          useScientific: false, precision: 6);
+      c1.text = ComplexFormatter.smartFormat(
+        c.modulus,
+        useScientific: false,
+        precision: 6,
+      );
       final ang = (fmt == ComplexInputFormat.polarDegree)
           ? c.phase() * 180 / pi
           : c.phase();
-      c2.text = ComplexFormatter.smartFormat(ang,
-          useScientific: false, precision: 6);
+      c2.text = ComplexFormatter.smartFormat(
+        ang,
+        useScientific: false,
+        precision: 6,
+      );
     }
   }
 
@@ -408,13 +445,18 @@ class _ConstantNoiseFigureCirclesPageState
 
       _currentFormat = ex.preferredFormat;
 
-      z0C.text = ComplexFormatter.smartFormat(ex.z0, precision: 6);
+      // ✅ CHANGED: null => blank
+      z0C.text = (ex.z0 == null)
+          ? ''
+          : ComplexFormatter.smartFormat(ex.z0!, precision: 6);
+
       fminC.text = ComplexFormatter.smartFormat(ex.fminDb, precision: 6);
       rnC.text = ComplexFormatter.smartFormat(ex.rnOhm, precision: 6);
       fListC.text =
           ex.fTargetsDb.map((e) => ComplexFormatter.smartFormat(e)).join(', ');
 
-      _setComplexToControllers(ex.gammaOpt, gammaOptC1, gammaOptC2, _currentFormat);
+      _setComplexToControllers(
+          ex.gammaOpt, gammaOptC1, gammaOptC2, _currentFormat);
 
       _slMode = ex.mode;
       if (_slMode == SourceLoadInputMode.gamma) {
@@ -454,7 +496,8 @@ class _ConstantNoiseFigureCirclesPageState
   void switchAllFormat(ComplexInputFormat newFormat) {
     setState(() {
       void convert(TextEditingController c1, TextEditingController c2) {
-        final c = ComplexParser.parseUniversal(_joinInput(c1, c2), _currentFormat);
+        final c =
+        ComplexParser.parseUniversal(_joinInput(c1, c2), _currentFormat);
         _setComplexToControllers(c, c1, c2, newFormat);
       }
 
@@ -477,7 +520,7 @@ class _ConstantNoiseFigureCirclesPageState
 
   void _switchSourceLoadMode(SourceLoadInputMode newMode) {
     setState(() {
-      final z0 = double.tryParse(z0C.text) ?? 50.0;
+      final z0 = _parseZ0();
 
       if (newMode == _slMode) return;
 
@@ -503,7 +546,7 @@ class _ConstantNoiseFigureCirclesPageState
   }
 
   void _syncOtherSideFromCurrentSide() {
-    final z0 = double.tryParse(z0C.text) ?? 50.0;
+    final z0 = _parseZ0();
 
     if (_slMode == SourceLoadInputMode.gamma) {
       final gs = _parseComplex(gammaSC1, gammaSC2);
@@ -547,8 +590,7 @@ class _ConstantNoiseFigureCirclesPageState
     // rn = Rn/Z0
     final rn = (Z0 > _eps) ? (Rn_val / Z0) : double.nan;
     if (!_isFiniteNum(rn)) {
-      _warn(
-          'rn = Rn/Z0 is invalid (Z0 too small). Noise circles may be skipped.');
+      _warn('rn = Rn/Z0 is invalid (Z0 too small). Noise circles may be skipped.');
     }
 
     final Gamma_s = _parseComplex(gammaSC1, gammaSC2);
@@ -561,8 +603,7 @@ class _ConstantNoiseFigureCirclesPageState
     final onePlusGammaOptAbs2 =
     pow((Complex(1, 0) + Gamma_opt).modulus, 2).toDouble();
     if (onePlusGammaOptAbs2 < _eps) {
-      _warn(
-          '|1 + Γopt| is near 0. This can cause divide-by-zero in NF formula.');
+      _warn('|1 + Γopt| is near 0. This can cause divide-by-zero in NF formula.');
     }
 
     final fListDb = fListC.text
@@ -586,17 +627,14 @@ class _ConstantNoiseFigureCirclesPageState
     if (!_isFiniteNum(gammaSAbs2) || !_isFiniteNum(diffAbs2)) {
       _warn('Γs or Γopt is invalid (NaN/Inf). NF cannot be computed.');
     } else if (gammaSAbs2 >= 1.0) {
-      _warn(
-          '|Γs| >= 1 makes (1-|Γs|^2) <= 0. NF formula invalid for passive source.');
-    } else if (!_isFiniteNum(onePlusGammaOptAbs2) ||
-        onePlusGammaOptAbs2 < _eps) {
+      _warn('|Γs| >= 1 makes (1-|Γs|^2) <= 0. NF formula invalid for passive source.');
+    } else if (!_isFiniteNum(onePlusGammaOptAbs2) || onePlusGammaOptAbs2 < _eps) {
       _warn('|1 + Γopt|^2 is near 0. NF denominator is near 0.');
     } else if (!_isFiniteNum(rn) || rn.abs() < _eps) {
       if (rn.abs() < _eps) {
         _nfLinForGammaS = Fmin_lin;
         _nfDbForGammaS = Fmin_dB;
-        _warn(
-            'rn is ~0, NF collapses to Fmin. Noise circles will be skipped.');
+        _warn('rn is ~0, NF collapses to Fmin. Noise circles will be skipped.');
       } else {
         _warn('rn is invalid. NF cannot be computed reliably.');
       }
@@ -608,9 +646,7 @@ class _ConstantNoiseFigureCirclesPageState
         _warn('NF denominator is near 0. NF cannot be computed.');
       } else {
         final F_lin_specific = Fmin_lin + addTerm;
-        if (F_lin_specific <= 0 ||
-            F_lin_specific.isNaN ||
-            F_lin_specific.isInfinite) {
+        if (F_lin_specific <= 0 || F_lin_specific.isNaN || F_lin_specific.isInfinite) {
           _warn('Computed F(linear) is invalid (<=0 or NaN/Inf).');
         } else {
           final F_db_specific = 10.0 * (log(F_lin_specific) / ln10);
@@ -634,16 +670,17 @@ class _ConstantNoiseFigureCirclesPageState
           _texScroll(
               r'F = F_{\min} + \frac{4 r_n |\Gamma_s - \Gamma_{opt}|^2}{ (1 - |\Gamma_s|^2)\, |1 + \Gamma_{opt}|^2 }'),
           _latexTitle('Given Noise Parameters:', fontSize: 14),
+          _texScroll(r'Z_0 = ' + ComplexFormatter.smartFormat(Z0) + r' \Omega'),
           _texScroll(
-              r'Z_0 = ' + ComplexFormatter.smartFormat(Z0) + r' \Omega'),
-          _texScroll(r'R_n = ' +
-              ComplexFormatter.smartFormat(Rn_val) +
-              r' \Omega \Rightarrow r_n = \frac{R_n}{Z_0} = ' +
-              ComplexFormatter.smartFormat(rn)),
-          _texScroll(r'F_{\min} = ' +
-              ComplexFormatter.smartFormat(Fmin_dB) +
-              r' \text{ dB} \Rightarrow F_{\min,lin} = ' +
-              ComplexFormatter.smartFormat(Fmin_lin)),
+              r'R_n = ' +
+                  ComplexFormatter.smartFormat(Rn_val) +
+                  r' \Omega \Rightarrow r_n = \frac{R_n}{Z_0} = ' +
+                  ComplexFormatter.smartFormat(rn)),
+          _texScroll(
+              r'F_{\min} = ' +
+                  ComplexFormatter.smartFormat(Fmin_dB) +
+                  r' \text{ dB} \Rightarrow F_{\min,lin} = ' +
+                  ComplexFormatter.smartFormat(Fmin_lin)),
           // 使用当前格式显示 Γopt
           _texScroll(r'\Gamma_{opt} = ' +
               ComplexFormatter.latex(Gamma_opt, _currentFormat, precision: 4)),
@@ -681,8 +718,7 @@ class _ConstantNoiseFigureCirclesPageState
     ComplexFormatter.latex(Gamma_s, _currentFormat, precision: 3);
     final String strGammaOpt =
     ComplexFormatter.latex(Gamma_opt, _currentFormat, precision: 3);
-    final String strNumDiffSub =
-        r'|' + strGammaS + r' - ' + strGammaOpt + r'|^2';
+    final String strNumDiffSub = r'|' + strGammaS + r' - ' + strGammaOpt + r'|^2';
     final String strDenom1Sub = r'(1 - |' + strGammaS + r'|^2)';
     final String strDenom2Sub = r'|1 + ' + strGammaOpt + r'|^2';
     final String strFminLin = _texNum(Fmin_lin, precision: 4);
@@ -702,21 +738,21 @@ class _ConstantNoiseFigureCirclesPageState
           _text('Using values in selected format:'),
           _texScroll(r'\Gamma_s = ' + strGammaS),
           _texScroll(r'\Gamma_{opt} = ' + strGammaOpt),
-          _texScroll(
-              r'F_{\min,lin} = ' + strFminLin + r',\quad r_n = ' + strRn),
+          _texScroll(r'F_{\min,lin} = ' + strFminLin + r',\quad r_n = ' + strRn),
           const SizedBox(height: 8),
           _latexTitle('3. Final Substitution (No Calculation)',
               fontSize: 14, fontWeight: FontWeight.bold),
-          _texScroll(r'F = ' +
-              strFminLin +
-              r' + \frac{4 \cdot ' +
-              strRn +
-              r' \cdot ' +
-              strNumDiffSub +
-              r'}{' +
-              strDenom1Sub +
-              strDenom2Sub +
-              r'}'),
+          _texScroll(
+              r'F = ' +
+                  strFminLin +
+                  r' + \frac{4 \cdot ' +
+                  strRn +
+                  r' \cdot ' +
+                  strNumDiffSub +
+                  r'}{' +
+                  strDenom1Sub +
+                  strDenom2Sub +
+                  r'}'),
           const Divider(),
           _latexTitle('4. Result', fontSize: 14, fontWeight: FontWeight.bold),
           _texScroll(r'F_{lin} = ' +
@@ -790,8 +826,7 @@ class _ConstantNoiseFigureCirclesPageState
 
         _stepPanels.add(
           StepPanel(
-            title:
-            'Noise Circle for F = ${ComplexFormatter.smartFormat(Fi_db)} dB',
+            title: 'Noise Circle for F = ${ComplexFormatter.smartFormat(Fi_db)} dB',
             content: [
               _latexTitle('1) Convert F to linear',
                   fontSize: 14, fontWeight: FontWeight.bold),
@@ -802,8 +837,7 @@ class _ConstantNoiseFigureCirclesPageState
               const Divider(),
               _latexTitle('2) Calculate parameter Ni',
                   fontSize: 14, fontWeight: FontWeight.bold),
-              _texScroll(
-                  r'N_i = \frac{F - F_{\min}}{4 r_n}\, |1 + \Gamma_{opt}|^2'),
+              _texScroll(r'N_i = \frac{F - F_{\min}}{4 r_n}\, |1 + \Gamma_{opt}|^2'),
               // Substitution (Detailed)
               _texScroll(r'N_i = \frac{' +
                   strFiLin +
@@ -855,10 +889,12 @@ class _ConstantNoiseFigureCirclesPageState
     return null;
   }
 
+  // ✅ CHANGED: allow blank (meaning default 50)
   String? _z0Validator(String? v) {
-    final base = _requiredNum(v);
-    if (base != null) return base;
-    final x = double.parse(v!.trim());
+    if (v == null || v.trim().isEmpty) return null;
+
+    final x = double.tryParse(v.trim());
+    if (x == null) return 'Num Only';
     if (!x.isFinite || x <= 0) return 'Z0 must be > 0';
     return null;
   }
@@ -918,6 +954,7 @@ class _ConstantNoiseFigureCirclesPageState
       if (mag < 0) return 'Mag must be ≥ 0';
     }
 
+    // ✅ CHANGED: if Z0 blank => treat as 50 for validator too
     final z0 = double.tryParse(z0C.text.trim()) ?? 50.0;
     if (z0.isFinite && z0 > 0) {
       final z = _parseComplex(c1, c2);
@@ -986,7 +1023,8 @@ class _ConstantNoiseFigureCirclesPageState
     return TextFormField(
       controller: controller,
       validator: validator ?? _requiredNum,
-      keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true),
+      keyboardType:
+      const TextInputType.numberWithOptions(decimal: true, signed: true),
       textInputAction: action,
       onChanged: (_) {
         onChangedHook?.call();
@@ -1041,8 +1079,7 @@ class _ConstantNoiseFigureCirclesPageState
                 labelText: label1Text,
                 border: const OutlineInputBorder(),
                 isDense: true,
-                contentPadding:
-                const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
                 errorStyle: const TextStyle(height: 0.8),
               ),
             ),
@@ -1067,13 +1104,13 @@ class _ConstantNoiseFigureCirclesPageState
                 labelText: label2Text,
                 border: const OutlineInputBorder(),
                 isDense: true,
-                contentPadding:
-                const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
                 suffixText: suffix2,
                 suffixStyle: const TextStyle(
-                    color: Colors.black87,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w500),
+                  color: Colors.black87,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                ),
                 errorStyle: const TextStyle(height: 0.8),
               ),
             ),
@@ -1417,21 +1454,25 @@ class _ConstantNoiseFigureCirclesPageState
                     const SizedBox(height: 6),
                     ComplexInputRow(
                       format: _currentFormat,
-                      ctrl1: gammaSC1, ctrl2: gammaSC2,
+                      ctrl1: gammaSC1,
+                      ctrl2: gammaSC2,
                       paramName: 'Γs',
                       validator: (v) => _gammaRowValidator(gammaSC1, gammaSC2),
                       onAnyChanged: _onInputChanged,
                       onSubmit: _onCalculatePressed,
-                      action1: TextInputAction.next, action2: TextInputAction.next,
+                      action1: TextInputAction.next,
+                      action2: TextInputAction.next,
                     ),
                     ComplexInputRow(
                       format: _currentFormat,
-                      ctrl1: gammaLC1, ctrl2: gammaLC2,
+                      ctrl1: gammaLC1,
+                      ctrl2: gammaLC2,
                       paramName: 'ΓL',
                       validator: (v) => _gammaRowValidator(gammaLC1, gammaLC2),
                       onAnyChanged: _onInputChanged,
                       onSubmit: _onCalculatePressed,
-                      action1: TextInputAction.next, action2: TextInputAction.next,
+                      action1: TextInputAction.next,
+                      action2: TextInputAction.next,
                     ),
                   ],
                 ),
@@ -1450,21 +1491,25 @@ class _ConstantNoiseFigureCirclesPageState
                     const SizedBox(height: 6),
                     ComplexInputRow(
                       format: _currentFormat,
-                      ctrl1: zSC1, ctrl2: zSC2,
+                      ctrl1: zSC1,
+                      ctrl2: zSC2,
                       paramName: 'Zs (Ω)',
                       validator: (v) => _zRowValidator(zSC1, zSC2),
                       onAnyChanged: _onInputChanged,
                       onSubmit: _onCalculatePressed,
-                      action1: TextInputAction.next, action2: TextInputAction.next,
+                      action1: TextInputAction.next,
+                      action2: TextInputAction.next,
                     ),
                     ComplexInputRow(
                       format: _currentFormat,
-                      ctrl1: zLC1, ctrl2: zLC2,
+                      ctrl1: zLC1,
+                      ctrl2: zLC2,
                       paramName: 'ZL (Ω)',
                       validator: (v) => _zRowValidator(zLC1, zLC2),
                       onAnyChanged: _onInputChanged,
                       onSubmit: _onCalculatePressed,
-                      action1: TextInputAction.next, action2: TextInputAction.next,
+                      action1: TextInputAction.next,
+                      action2: TextInputAction.next,
                     ),
                   ],
                 ),
@@ -1480,12 +1525,14 @@ class _ConstantNoiseFigureCirclesPageState
               // Γopt
               ComplexInputRow(
                 format: _currentFormat,
-                ctrl1: gammaOptC1, ctrl2: gammaOptC2,
+                ctrl1: gammaOptC1,
+                ctrl2: gammaOptC2,
                 paramName: 'Γopt',
                 validator: (v) => _gammaRowValidator(gammaOptC1, gammaOptC2),
                 onAnyChanged: _onInputChanged,
                 onSubmit: _onCalculatePressed,
-                action1: TextInputAction.next, action2: TextInputAction.next,
+                action1: TextInputAction.next,
+                action2: TextInputAction.next,
               ),
 
               const SizedBox(height: 10),

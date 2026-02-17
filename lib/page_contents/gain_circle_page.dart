@@ -69,6 +69,8 @@ class _GainCirclePageState extends State<GainCirclePage> {
   Complex? _s11, _s22, _s21;
   List<double>? _targetGains;
 
+  double _z0Used = 50.0;
+
   Timer? _debounce;
 
   // =========================================================
@@ -121,7 +123,7 @@ class _GainCirclePageState extends State<GainCirclePage> {
     ),
     const GainCircleExamplePreset(
       name: 'Normal Passive Ports (|S11|,|S22| small)',
-      z0: '50',
+      z0: '',
       gainDbList: '6, 4, 2, 0, -2',
       s11Mag: '0.35',
       s11Ang: '-50',
@@ -132,7 +134,7 @@ class _GainCirclePageState extends State<GainCirclePage> {
     ),
     const GainCircleExamplePreset(
       name: 'Edge Case: |S11| ~ 0.999 (near singular)',
-      z0: '50',
+      z0: '',
       gainDbList: '3, 2, 1, 0, -1',
       s11Mag: '0.999',
       s11Ang: '-80',
@@ -143,7 +145,7 @@ class _GainCirclePageState extends State<GainCirclePage> {
     ),
     const GainCircleExamplePreset(
       name: 'Edge Case: |S22| ~ 0.999 (near singular)',
-      z0: '50',
+      z0: '',
       gainDbList: '3, 2, 1, 0, -1',
       s11Mag: '0.8',
       s11Ang: '-80',
@@ -154,7 +156,7 @@ class _GainCirclePageState extends State<GainCirclePage> {
     ),
     const GainCircleExamplePreset(
       name: 'Error Test: Input Unstable (|S11| >= 1)',
-      z0: '50',
+      z0: '',
       gainDbList: '3, 2, 1, 0, -1',
       s11Mag: '1.05',
       s11Ang: '-30',
@@ -165,7 +167,7 @@ class _GainCirclePageState extends State<GainCirclePage> {
     ),
     const GainCircleExamplePreset(
       name: 'Error Test: Output Unstable (|S22| >= 1)',
-      z0: '50',
+      z0: '',
       gainDbList: '3, 2, 1, 0, -1',
       s11Mag: '0.8',
       s11Ang: '-80',
@@ -176,7 +178,7 @@ class _GainCirclePageState extends State<GainCirclePage> {
     ),
     const GainCircleExamplePreset(
       name: 'Error Test: Zero Forward Gain (|S21| ≈ 0)',
-      z0: '50',
+      z0: '',
       gainDbList: '3, 2, 1, 0, -1',
       s11Mag: '0.8',
       s11Ang: '-80',
@@ -187,7 +189,7 @@ class _GainCirclePageState extends State<GainCirclePage> {
     ),
     const GainCircleExamplePreset(
       name: 'Table Test: Gain targets too high',
-      z0: '50',
+      z0: '',
       gainDbList: '20, 15, 10, 5, 0',
       s11Mag: '0.8',
       s11Ang: '-80',
@@ -330,6 +332,8 @@ class _GainCirclePageState extends State<GainCirclePage> {
       final s11 = _parseComplex(s11C1, s11C2);
       final s21 = _parseComplex(s21C1, s21C2);
       final s22 = _parseComplex(s22C1, s22C2);
+      final z0Text = z0C.text.trim();
+      final z0Used = (z0Text.isEmpty) ? 50.0 : double.parse(z0Text);
 
       if (s21.modulus < 1e-9) {
         setState(() {
@@ -366,6 +370,9 @@ class _GainCirclePageState extends State<GainCirclePage> {
         _s21 = s21;
         _s22 = s22;
         _targetGains = gains;
+
+        _z0Used = z0Used;
+
         _hasCalculated = true;
       });
     } catch (e) {
@@ -668,7 +675,17 @@ class _GainCirclePageState extends State<GainCirclePage> {
                 const SizedBox(height: 12),
 
                 Row(children: [
-                  Expanded(child: _buildScalarInput(z0C, 'Z0 (Ω)', validator: commonValidator)),
+                  Expanded(
+                    child: _buildScalarInput(
+                      z0C,
+                      'Z0 (Ω)',
+                      validator: (val) {
+                        final s = (val ?? '').trim();
+                        if (s.isEmpty) return null;
+                        return commonValidator(val);
+                      },
+                    ),
+                  ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: TextFormField(
@@ -958,7 +975,13 @@ class _InputGainSectionState extends State<InputGainSection> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 if (circles.isNotEmpty)
-                  Center(child: SizedBox(height: 320, width: 320, child: SmithGainCirclePainter(gainCircles: circles, canvasSize: 320))),
+                  Center(
+                    child: SizedBox(
+                      height: 320,
+                      width: 320,
+                      child: SmithGainCirclePainter(gainCircles: circles, canvasSize: 320),
+                    ),
+                  ),
                 const SizedBox(height: 16),
 
                 const Text("Summary Table:", style: TextStyle(fontWeight: FontWeight.bold)),
@@ -1095,8 +1118,7 @@ class _InputGainSectionState extends State<InputGainSection> {
                               ),
                               const Divider(),
                               _subHeader("3. Radius (r):"),
-                              _texScroll(
-                                  r'\text{Formula: } r_{g_s} = \frac{\sqrt{1-g_s}(1-|S_{11}|^2)}{1 - |S_{11}|^2 (1-g_s)}'),
+                              _texScroll(r'\text{Formula: } r_{g_s} = \frac{\sqrt{1-g_s}(1-|S_{11}|^2)}{1 - |S_{11}|^2 (1-g_s)}'),
                               _texScroll(
                                 r'\text{Substitution: } r_{g_s} = \frac{\sqrt{1-' +
                                     _texNum(g_s) +
@@ -1107,8 +1129,7 @@ class _InputGainSectionState extends State<InputGainSection> {
                                     r'}',
                               ),
                               _texScroll(
-                                r'\text{Result: } r_{g_s} = ' +
-                                    _texNum((sqrt(max(0, r_sq_inner)) * (1 - s11Abs2)) / denom),
+                                r'\text{Result: } r_{g_s} = ' + _texNum((sqrt(max(0, r_sq_inner)) * (1 - s11Abs2)) / denom),
                               ),
                             ],
                           ],
@@ -1223,7 +1244,13 @@ class _OutputGainSectionState extends State<OutputGainSection> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 if (circles.isNotEmpty)
-                  Center(child: SizedBox(height: 320, width: 320, child: SmithGainCirclePainter(gainCircles: circles, canvasSize: 320))),
+                  Center(
+                    child: SizedBox(
+                      height: 320,
+                      width: 320,
+                      child: SmithGainCirclePainter(gainCircles: circles, canvasSize: 320),
+                    ),
+                  ),
                 const SizedBox(height: 16),
                 const Text("Summary Table:", style: TextStyle(fontWeight: FontWeight.bold)),
                 SingleChildScrollView(
@@ -1357,8 +1384,7 @@ class _OutputGainSectionState extends State<OutputGainSection> {
                               ),
                               const Divider(),
                               _subHeader("3. Radius (r):"),
-                              _texScroll(
-                                  r'\text{Formula: } r_{g_L} = \frac{\sqrt{1-g_L}(1-|S_{22}|^2)}{1 - |S_{22}|^2 (1-g_L)}'),
+                              _texScroll(r'\text{Formula: } r_{g_L} = \frac{\sqrt{1-g_L}(1-|S_{22}|^2)}{1 - |S_{22}|^2 (1-g_L)}'),
                               _texScroll(
                                 r'\text{Substitution: } r_{g_L} = \frac{\sqrt{1-' +
                                     _texNum(g_l) +
@@ -1369,8 +1395,7 @@ class _OutputGainSectionState extends State<OutputGainSection> {
                                     r'}',
                               ),
                               _texScroll(
-                                r'\text{Result: } r_{g_L} = ' +
-                                    _texNum((sqrt(max(0, r_sq_inner)) * (1 - s22Abs2)) / denom),
+                                r'\text{Result: } r_{g_L} = ' + _texNum((sqrt(max(0, r_sq_inner)) * (1 - s22Abs2)) / denom),
                               ),
                             ],
                           ],
