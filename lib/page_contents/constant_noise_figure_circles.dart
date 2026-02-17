@@ -240,7 +240,7 @@ class _ConstantNoiseFigureCirclesPageState
       title: 'Example C (Impedance input mode)',
       subtitle: 'Enter Zs/ZL and auto-convert to Γs/ΓL',
       mode: SourceLoadInputMode.impedance,
-      preferredFormat: ComplexInputFormat.cartesian,
+      preferredFormat: ComplexInputFormat.polarDegree,
       z0: null,
       fminDb: 1.8,
       rnOhm: 5.0,
@@ -1333,44 +1333,41 @@ class _ConstantNoiseFigureCirclesPageState
               color: Colors.black87,
             );
 
-            final prevBtn = ElevatedButton.icon(
-              onPressed: _prevExample,
-              icon: const Icon(Icons.chevron_left),
-              label: _latexTitle(
-                "Previous Example",
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-              ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.deepPurple,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                elevation: 2,
-              ),
-            );
-
-            final nextBtn = ElevatedButton.icon(
-              onPressed: _nextExample,
-              icon: const Icon(Icons.chevron_right),
-              label: _latexTitle(
-                "Next Example",
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-              ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.deepPurple,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                elevation: 2,
-              ),
+            // reuse one style
+            final btnStyle = ElevatedButton.styleFrom(
+              backgroundColor: Colors.deepPurple,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              elevation: 2,
             );
 
             if (!isNarrow) {
-              // Wide layout: title left, buttons right
+              // Wide: full text labels
+              final prevBtn = ElevatedButton.icon(
+                onPressed: _prevExample,
+                icon: const Icon(Icons.chevron_left),
+                label: _latexTitle(
+                  "Previous Example",
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+                style: btnStyle,
+              );
+
+              final nextBtn = ElevatedButton.icon(
+                onPressed: _nextExample,
+                icon: const Icon(Icons.chevron_right),
+                label: _latexTitle(
+                  "Next Example",
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.white,
+                ),
+                style: btnStyle,
+              );
+
               return Row(
                 children: [
                   Expanded(child: titleWidget),
@@ -1382,16 +1379,44 @@ class _ConstantNoiseFigureCirclesPageState
               );
             }
 
-            // Narrow layout: title on top, buttons wrap below
+            // Narrow: keep buttons ALWAYS in one row (short labels)
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 titleWidget,
                 const SizedBox(height: 10),
-                Wrap(
-                  spacing: 10,
-                  runSpacing: 10,
-                  children: [prevBtn, nextBtn],
+                Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: _prevExample,
+                        icon: const Icon(Icons.chevron_left),
+                        label: _latexTitle(
+                          "Prev",
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                          textAlign: TextAlign.center,
+                        ),
+                        style: btnStyle,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: _nextExample,
+                        icon: const Icon(Icons.chevron_right),
+                        label: _latexTitle(
+                          "Next",
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                          textAlign: TextAlign.center,
+                        ),
+                        style: btnStyle,
+                      ),
+                    ),
+                  ],
                 ),
               ],
             );
