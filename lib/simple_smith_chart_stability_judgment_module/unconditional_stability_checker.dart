@@ -1,10 +1,7 @@
-import 'package:flutter_math_fork/flutter_math.dart'; // 用于Latex公式渲染
+import 'package:flutter_math_fork/flutter_math.dart';
 import 'package:equations/equations.dart';
 
-// 检查无条件稳定性的工具类（射频放大器常见判断）
-// 原理参考稳定圆理论，判断放大器在给定源/负载平面是否无条件稳定
 class UnconditionalStabilityChecker {
-  // 成员变量定义：
   final Complex cs;  // 源稳定圆圆心（复数，反射系数坐标）
   final double rs;   // 源稳定圆半径（同上）
   final Complex cL;  // 负载稳定圆圆心
@@ -12,7 +9,6 @@ class UnconditionalStabilityChecker {
   final Complex s11; // S11参数（输入端反射系数，复数）
   final Complex s22; // S22参数（输出端反射系数，复数）
 
-  // 构造函数，全部为必填
   UnconditionalStabilityChecker({
     required this.cs,
     required this.rs,
@@ -22,12 +18,9 @@ class UnconditionalStabilityChecker {
     required this.s22,
   });
 
-  // 核心判断函数，返回一个字符串结果（用英文描述结论，可直接显示到UI）
   String check() {
-    // 计算负载侧 |CL - rL| 距离（实际为圆心到圆边的距离）
     double csDistance = (cs.abs() - rs).abs();
     double clDistance = (cL.abs() - rL).abs();
-    // 分别计算 S11、S22 的模值
     double s11Abs = s11.abs();
     double s22Abs = s22.abs();
 

@@ -63,15 +63,6 @@ class _ConstantNoiseFigureCirclesPageState
 
   ComplexInputFormat _currentFormat = ComplexInputFormat.polarDegree;
 
-  final s11C1 = TextEditingController(text: '0.6');
-  final s11C2 = TextEditingController(text: '-60');
-  final s12C1 = TextEditingController(text: '0.05');
-  final s12C2 = TextEditingController(text: '26');
-  final s21C1 = TextEditingController(text: '1.9');
-  final s21C2 = TextEditingController(text: '81');
-  final s22C1 = TextEditingController(text: '0.5');
-  final s22C2 = TextEditingController(text: '-60');
-
   // noise params
   final gammaOptC1 = TextEditingController(text: '0.485');
   final gammaOptC2 = TextEditingController(text: '155');
@@ -82,20 +73,18 @@ class _ConstantNoiseFigureCirclesPageState
 
   SourceLoadInputMode _slMode = SourceLoadInputMode.gamma;
 
-  // Γs, ΓL
   final gammaSC1 = TextEditingController(text: '0.2');
   final gammaSC2 = TextEditingController(text: '-30');
   final gammaLC1 = TextEditingController(text: '0.1');
   final gammaLC2 = TextEditingController(text: '20');
-
-  // Zs, ZL
   final zSC1 = TextEditingController(text: '50');
   final zSC2 = TextEditingController(text: '0');
   final zLC1 = TextEditingController(text: '50');
   final zLC2 = TextEditingController(text: '0');
 
-  // results state
   bool _hasCalculated = false;
+
+  Complex? _userGammaS;
 
   List<bool> _expandedList = [];
   List<StepPanel> _stepPanels = [];
@@ -246,14 +235,6 @@ class _ConstantNoiseFigureCirclesPageState
   void dispose() {
     _debounceTimer?.cancel();
     for (final c in [
-      s11C1,
-      s11C2,
-      s12C1,
-      s12C2,
-      s21C1,
-      s21C2,
-      s22C1,
-      s22C2,
       gammaOptC1,
       gammaOptC2,
       z0C,
@@ -421,6 +402,7 @@ class _ConstantNoiseFigureCirclesPageState
       _stepPanels.clear();
       _summaryTableData.clear();
       noiseFigureCirclePainterData.clear();
+      _userGammaS = null;
       _expandedList = [];
 
       _currentFormat = ex.preferredFormat;
@@ -479,11 +461,6 @@ class _ConstantNoiseFigureCirclesPageState
         ComplexParser.parseUniversal(_joinInput(c1, c2), _currentFormat);
         _setComplexToControllers(c, c1, c2, newFormat);
       }
-
-      convert(s11C1, s11C2);
-      convert(s12C1, s12C2);
-      convert(s21C1, s21C2);
-      convert(s22C1, s22C2);
 
       convert(gammaOptC1, gammaOptC2);
       convert(gammaSC1, gammaSC2);
@@ -578,6 +555,8 @@ class _ConstantNoiseFigureCirclesPageState
     final Zs = _gammaToZSafe(Gamma_s, Z0);
     final Zl = _gammaToZSafe(Gamma_L, Z0);
 
+    _userGammaS = Gamma_s;
+
     final gammaOptAbs2 = pow(Gamma_opt.modulus, 2).toDouble();
     final onePlusGammaOptAbs2 =
     pow((Complex(1, 0) + Gamma_opt).modulus, 2).toDouble();
@@ -596,7 +575,26 @@ class _ConstantNoiseFigureCirclesPageState
     _stepPanels.clear();
     _summaryTableData.clear();
 
-    // 3. Calculation for specific Γs
+    noiseFigureCirclePainterData.add(
+      GainCircleData(
+        center: Gamma_opt,
+        radius: 0.0,
+        color: Colors.red,
+        label: 'Γopt (Fmin)',
+      ),
+    );
+
+    if (_isFiniteComplex(Gamma_s)) {
+      noiseFigureCirclePainterData.add(
+        GainCircleData(
+          center: Gamma_s,
+          radius: 0.0,
+          color: Colors.deepPurple,
+          label: 'Your Γs',
+        ),
+      );
+    }
+
     _nfLinForGammaS = null;
     _nfDbForGammaS = null;
 
@@ -659,7 +657,6 @@ class _ConstantNoiseFigureCirclesPageState
                   ComplexFormatter.smartFormat(Fmin_dB) +
                   r' \text{ dB} \Rightarrow F_{\min,lin} = ' +
                   ComplexFormatter.smartFormat(Fmin_lin)),
-          // 使用当前格式显示 Γopt
           _texScroll(r'\Gamma_{opt} = ' +
               ComplexFormatter.latex(Gamma_opt, _currentFormat, precision: 4)),
           const Divider(),
@@ -673,10 +670,10 @@ class _ConstantNoiseFigureCirclesPageState
                   ? r'\text{—}'
                   : ComplexFormatter.latex(Zs, _currentFormat, precision: 4)) +
               r'\ \Omega'),
-          // 【新增】 ΓL
+          // ΓL
           _texScroll(r'\Gamma_L = ' +
               ComplexFormatter.latex(Gamma_L, _currentFormat, precision: 4)),
-          // 【新增】 ZL
+          // ZL
           _texScroll(r'Z_L = ' +
               (Zl == null
                   ? r'\text{—}'
@@ -1088,51 +1085,6 @@ class _ConstantNoiseFigureCirclesPageState
           ),
         ],
       ),
-    );
-  }
-
-  Widget _complexRowAutoLabels({
-    required String paramName,
-    required TextEditingController c1,
-    required TextEditingController c2,
-    required String? Function(String?) validatorPair,
-  }) {
-    String label1Text;
-    String label2Text;
-    String middleSymbol;
-    String? suffix2;
-
-    switch (_currentFormat) {
-      case ComplexInputFormat.cartesian:
-        label1Text = 'Real';
-        label2Text = 'Imag';
-        middleSymbol = '+';
-        suffix2 = 'j';
-        break;
-      case ComplexInputFormat.polarDegree:
-        label1Text = 'Mag';
-        label2Text = 'Ang';
-        middleSymbol = '∠';
-        suffix2 = '°';
-        break;
-      case ComplexInputFormat.polarRadian:
-        label1Text = 'Mag';
-        label2Text = 'Rad';
-        middleSymbol = '∠';
-        suffix2 = 'rad';
-        break;
-    }
-
-    return _buildComplexRow(
-      paramName: paramName,
-      ctrl1: c1,
-      ctrl2: c2,
-      label1Text: label1Text,
-      label2Text: label2Text,
-      middleSymbol: middleSymbol,
-      suffix2: suffix2,
-      validator1: (_) => validatorPair(null),
-      validator2: (_) => validatorPair(null),
     );
   }
 
@@ -1680,7 +1632,62 @@ class _ConstantNoiseFigureCirclesPageState
                           height: 350,
                           child: SmithGainCirclePainter(
                             gainCircles: noiseFigureCirclePainterData,
+                            userPoint: null, // 我们已经把特殊点塞入数据数组，所以这里传null
                             canvasSize: 350,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.grey[50],
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.grey.shade300),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _latexTitle("Chart Legend & Teaching Tips:", fontSize: 13, fontWeight: FontWeight.bold),
+                              const SizedBox(height: 8),
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text("🔴 ", style: TextStyle(fontSize: 14)),
+                                  Expanded(
+                                    child: RichText(
+                                      text: TextSpan(
+                                        style: TextStyle(fontSize: 13, color: Colors.grey[800], height: 1.4),
+                                        children: const [
+                                          TextSpan(text: "Red Dot (Γopt): ", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red)),
+                                          TextSpan(text: "The \"bullseye\" or optimal source match for minimum noise. If your source point lands exactly here, your Noise Figure hits the absolute minimum (Fmin)."),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              if (_userGammaS != null) ...[
+                                const SizedBox(height: 6),
+                                Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text("🟣 ", style: TextStyle(fontSize: 14)),
+                                    Expanded(
+                                      child: RichText(
+                                        text: TextSpan(
+                                          style: TextStyle(fontSize: 13, color: Colors.grey[800], height: 1.4),
+                                          children: const [
+                                            TextSpan(text: "Purple Dot (Your Γs): ", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.deepPurple)),
+                                            TextSpan(text: "Your current designed source reflection. Notice how the Noise Figure increases the further this dot moves away from the Red Dot."),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ],
                           ),
                         ),
                       ],

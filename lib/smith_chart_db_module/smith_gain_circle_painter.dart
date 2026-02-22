@@ -2,7 +2,6 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:equations/equations.dart';
 
-// 增益圆数据结构
 class GainCircleData {
   final Complex center;
   final double radius;
@@ -16,16 +15,15 @@ class GainCircleData {
   });
 }
 
-// Smith+增益圆可视化控件
 class SmithGainCirclePainter extends StatelessWidget {
   final List<GainCircleData> gainCircles;
-  final Complex? userPoint;  // 用户输入的伽马点
+  final Complex? userPoint;
   final double canvasSize;
 
   const SmithGainCirclePainter({
     super.key,
     required this.gainCircles,
-    this.userPoint,  // 接收用户输入的点
+    this.userPoint,
     this.canvasSize = 420,
   });
 
@@ -38,7 +36,7 @@ class SmithGainCirclePainter extends StatelessWidget {
         child: CustomPaint(
           painter: _SmithGainPainter(
             gainCircles: gainCircles,
-            userPoint: userPoint,  // 传递用户输入的点
+            userPoint: userPoint,
           ),
         ),
       ),
@@ -48,9 +46,8 @@ class SmithGainCirclePainter extends StatelessWidget {
 
 class _SmithGainPainter extends CustomPainter {
   final List<GainCircleData> gainCircles;
-  final Complex? userPoint;  // 用户输入的伽马点
+  final Complex? userPoint;
 
-  // 颜色列表，用于循环分配给增益圆
   final List<Color> circleColors = [
     Colors.blueAccent,    // 亮蓝
     Colors.green,         // 绿
@@ -64,7 +61,7 @@ class _SmithGainPainter extends CustomPainter {
 
   _SmithGainPainter({
     required this.gainCircles,
-    this.userPoint,  // 接收用户输入的点
+    this.userPoint,
   });
 
   @override
@@ -72,23 +69,19 @@ class _SmithGainPainter extends CustomPainter {
     double scale = size.width / 2;
     final smithCenter = Offset(scale, scale);
 
-    // ================= 1. 绘制史密斯圆图背景 (保持原样) =================
 
-    // 1.1 单位Smith圆
     final smithPaint = Paint()
       ..color = Colors.black
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2.2;
     canvas.drawCircle(smithCenter, scale, smithPaint);
 
-    // 1.2 坐标轴
     final axisPaint = Paint()
       ..color = Colors.black.withOpacity(0.35)
       ..strokeWidth = 1;
     canvas.drawLine(Offset(scale, 0), Offset(scale, size.height), axisPaint);
     canvas.drawLine(Offset(0, scale), Offset(size.width, scale), axisPaint);
 
-    // 1.3 等实部圆（r-circles）
     final rValues = [0.2, 0.5, 1, 2, 5];
     final rPaint = Paint()
       ..color = Colors.red.withOpacity(0.38)
@@ -101,7 +94,6 @@ class _SmithGainPainter extends CustomPainter {
       final rRadius = radius * scale;
       canvas.drawCircle(center, rRadius, rPaint);
 
-      // 标注
       final x0 = (cx - radius) * scale + scale;
       final y0 = scale;
       final label = TextPainter(
@@ -115,7 +107,6 @@ class _SmithGainPainter extends CustomPainter {
       label.paint(canvas, Offset(x0 - label.width - 4, y0 + 4));
     }
 
-    // 1.4 等虚部圆（x-circles）
     final xValues = [-5, -2, -1, -0.5, -0.2, 5, 2, 1, 0.5, 0.2];
     final Map<double, double> jLabelSwap = {
       5: 0.2, 2: 0.5, 1: 1, 0.5: 2, 0.2: 5,
@@ -152,7 +143,6 @@ class _SmithGainPainter extends CustomPainter {
       }
       canvas.drawPath(arcPath, xPaint);
 
-      // 标注 +j/-j
       double denom = (x * x + 1);
       double x_left = (-x * x + 1) / denom;
       double y_up = sqrt(1 - x_left * x_left);
@@ -185,38 +175,78 @@ class _SmithGainPainter extends CustomPainter {
       }
     }
 
-    // ================= 2. 绘制增益圆 =================
+    int specialPointCount = 0;
 
     for (int i = 0; i < gainCircles.length; i++) {
       final c = gainCircles[i];
-      final Color uniqueColor = circleColors[i % circleColors.length];
+      final Color drawColor = c.color != Colors.blueAccent ? c.color : circleColors[i % circleColors.length];
 
       final center = Offset(c.center.real * scale + scale, scale - c.center.imaginary * scale);
       final radius = c.radius * scale;
 
-      // 2.1 画增益圆的外圈
+      if (c.radius < 1e-6) {
+        final pointOutlinePaint = Paint()
+          ..color = Colors.white
+          ..style = PaintingStyle.fill;
+        canvas.drawCircle(center, 8.5, pointOutlinePaint);
+
+        final pointFillPaint = Paint()
+          ..color = drawColor
+          ..style = PaintingStyle.fill;
+        canvas.drawCircle(center, 6.5, pointFillPaint);
+
+        final textSpan = TextSpan(
+          text: c.label,
+          style: TextStyle(
+            color: drawColor,
+            fontWeight: FontWeight.bold,
+            fontSize: 14,
+            shadows: const [
+              Shadow(offset: Offset(1.2, 1.2), blurRadius: 2.0, color: Colors.white),
+              Shadow(offset: Offset(-1.2, -1.2), blurRadius: 2.0, color: Colors.white),
+            ],
+          ),
+        );
+        final tp = TextPainter(text: textSpan, textDirection: TextDirection.ltr);
+        tp.layout();
+
+        // 智能避让：把标签分散到4个不同象限 (-45°, 135°, 45°, -135°)
+        final List<double> escapeAngles = [-pi / 4, 3 * pi / 4, pi / 4, -3 * pi / 4];
+        double ang = escapeAngles[specialPointCount % escapeAngles.length];
+        specialPointCount++;
+
+        double dist = 12.0;
+        double dx = dist * cos(ang);
+        double dy = dist * sin(ang);
+
+        double shiftX = (cos(ang) >= 0) ? 0.0 : -tp.width;
+        double shiftY = (sin(ang) >= 0) ? 0.0 : -tp.height;
+
+        tp.paint(canvas, center + Offset(dx, dy) + Offset(shiftX, shiftY));
+
+        continue;
+      }
+
       final circlePaint = Paint()
-        ..color = uniqueColor
+        ..color = drawColor
         ..style = PaintingStyle.stroke
         ..strokeWidth = 2.5;
       canvas.drawCircle(center, radius, circlePaint);
 
-      // 2.2 画圆心
       final centerPaint = Paint()
-        ..color = uniqueColor.withOpacity(0.8)
+        ..color = drawColor.withOpacity(0.8)
         ..style = PaintingStyle.fill;
       canvas.drawCircle(center, 4, centerPaint);
 
-      // 2.3 绘制标签
       final textSpan = TextSpan(
         text: c.label,
         style: TextStyle(
-          color: uniqueColor,
+          color: drawColor,
           fontWeight: FontWeight.bold,
-          fontSize: 15,
-          shadows: [
-            Shadow(offset: const Offset(1.2, 1.2), blurRadius: 2.0, color: Colors.white),
-            Shadow(offset: const Offset(-1.2, -1.2), blurRadius: 2.0, color: Colors.white),
+          fontSize: 14,
+          shadows: const [
+            Shadow(offset: Offset(1.2, 1.2), blurRadius: 2.0, color: Colors.white),
+            Shadow(offset: Offset(-1.2, -1.2), blurRadius: 2.0, color: Colors.white),
           ],
         ),
       );
@@ -227,32 +257,36 @@ class _SmithGainPainter extends CustomPainter {
       );
       tp.layout();
 
-      double angleStep = pi / 2;
-      double startAngle = -pi / 4;
+      double angleStep = pi / 7;
+      double startAngle = -pi / 3;
       double currentAngle = startAngle - (i * angleStep);
-
-      double dist = max(radius, 25.0);
-
+      double dist = max(radius + 4.0, 20.0);
       double dx = dist * cos(currentAngle);
       double dy = dist * sin(currentAngle);
 
       Offset labelPos = center + Offset(dx, dy);
 
-      tp.paint(canvas, labelPos - Offset(tp.width / 2, tp.height / 2));
+      double shiftX = (cos(currentAngle) >= 0) ? 2.0 : -tp.width - 2.0;
+      double shiftY = -tp.height / 2;
+
+      tp.paint(canvas, labelPos + Offset(shiftX, shiftY));
     }
 
-    // ================= 3. 绘制用户输入点 ==================
     if (userPoint != null) {
       final x = userPoint!.real * scale + scale;
       final y = -userPoint!.imaginary * scale + scale;
 
+      final outlinePaint = Paint()
+        ..color = Colors.white
+        ..style = PaintingStyle.fill;
+      canvas.drawCircle(Offset(x, y), 8, outlinePaint);
+
       final paint = Paint()
         ..color = Colors.red
         ..style = PaintingStyle.fill;
-      canvas.drawCircle(Offset(x, y), 6, paint); // 标记输入点
+      canvas.drawCircle(Offset(x, y), 6, paint);
     }
 
-    // 3. Smith圆心标注
     final centerText = TextPainter(
       text: const TextSpan(
         text: "Smith Center",
