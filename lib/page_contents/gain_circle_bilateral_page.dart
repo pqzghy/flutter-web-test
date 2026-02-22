@@ -9,24 +9,30 @@ import '../input_and_output_functions/utils.dart';
 import '../functional_components/fixed_input.dart';
 import '../smith_chart_db_module/smith_gain_circle_painter.dart';
 
-// Simple data structure: Step panels
+
+enum SourceLoadInputMode {
+  gamma, // input Γs, ΓL
+  impedance, // input Zs, ZL
+}
+
+enum SmithPlaneView { gammaL, gammaS }
+
 class StepPanel {
   final String title;
   final List<Widget> content;
   StepPanel({required this.title, required this.content});
 }
 
-// Example data structure
 class GainCircleExample {
   final String name;
-
-  // Store in Polar(Degree) as the canonical representation
   final double s11Mag, s11AngDeg;
   final double s12Mag, s12AngDeg;
   final double s21Mag, s21AngDeg;
   final double s22Mag, s22AngDeg;
   final double? z0;
   final String gainDbList; // e.g. "6, 8, 10"
+  final double? gammaSMag, gammaSAngDeg;
+  final double? gammaLMag, gammaLAngDeg;
 
   const GainCircleExample({
     required this.name,
@@ -40,12 +46,27 @@ class GainCircleExample {
     required this.s22AngDeg,
     this.z0,
     this.gainDbList = '6, 8, 10',
+    this.gammaSMag,
+    this.gammaSAngDeg,
+    this.gammaLMag,
+    this.gammaLAngDeg,
   });
 
   Complex get S11 => Complex.fromPolar(r: s11Mag, theta: s11AngDeg * pi / 180.0);
   Complex get S12 => Complex.fromPolar(r: s12Mag, theta: s12AngDeg * pi / 180.0);
   Complex get S21 => Complex.fromPolar(r: s21Mag, theta: s21AngDeg * pi / 180.0);
   Complex get S22 => Complex.fromPolar(r: s22Mag, theta: s22AngDeg * pi / 180.0);
+
+  // 转换为 Complex 对象，如果没有提供默认值则返回 null
+  Complex? get gammaS {
+    if (gammaSMag == null || gammaSAngDeg == null) return null;
+    return Complex.fromPolar(r: gammaSMag!, theta: gammaSAngDeg! * pi / 180.0);
+  }
+
+  Complex? get gammaL {
+    if (gammaLMag == null || gammaLAngDeg == null) return null;
+    return Complex.fromPolar(r: gammaLMag!, theta: gammaLAngDeg! * pi / 180.0);
+  }
 }
 
 // Cases (A/B/C)
@@ -77,6 +98,9 @@ class GainCircleBilateralPage extends StatefulWidget {
 class _GainCircleBilateralPageState extends State<GainCircleBilateralPage> {
   final _formKey = GlobalKey<FormState>();
 
+  Complex? _userGammaS;
+  Complex? _userGammaL;
+
   // 防抖计时器
   Timer? _debounceTimer;
 
@@ -94,13 +118,35 @@ class _GainCircleBilateralPageState extends State<GainCircleBilateralPage> {
   final z0C = TextEditingController(text: '50');
   final gainDbListC = TextEditingController(text: '6, 8, 10');
 
+  SourceLoadInputMode _slMode = SourceLoadInputMode.gamma;
+  bool _isSyncingSL = false;
+
+  final gammaSC1 = TextEditingController(text: '0');
+  final gammaSC2 = TextEditingController(text: '0');
+  final gammaLC1 = TextEditingController(text: '0');
+  final gammaLC2 = TextEditingController(text: '0');
+
+  final zsC1 = TextEditingController(text: '50');
+  final zsC2 = TextEditingController(text: '0');
+  final zlC1 = TextEditingController(text: '50');
+  final zlC2 = TextEditingController(text: '0');
+
   // State
   bool _hasCalculated = false;
 
   List<bool> _expandedList = [];
   final List<StepPanel> _stepPanels = [];
   final List<List<String>> _summaryTableData = [];
+
+  // ΓL-plane circles (Gain circles + Output stability circle)
   final List<GainCircleData> gainCirclesData = [];
+
+  // ΓS-plane circles (Input stability circle)
+  final List<GainCircleData> gainCirclesGammaS = [];
+
+  // Smith chart view switch
+  SmithPlaneView _smithView = SmithPlaneView.gammaL;
+
   bool _isUnconditionallyStable = false;
 
   double _z0Used = 50.0;
@@ -122,6 +168,53 @@ class _GainCircleBilateralPageState extends State<GainCircleBilateralPage> {
 
     _examples = const [
       // ======= Dedicated teaching samples (A/B/C) =======
+      GainCircleExample(
+        name: 'Example 4-4 (1.8 GHz, Bilateral)',
+        s11Mag: 0.26,
+        s11AngDeg: -55,
+        s12Mag: 0.08,
+        s12AngDeg: 80,
+        s21Mag: 2.14,
+        s21AngDeg: 65,
+        s22Mag: 0.82,
+        s22AngDeg: -30,
+        z0: 50,
+        gainDbList: '6, 8, 10',
+        gammaSMag: 0.487,
+        gammaSAngDeg: 148,
+        gammaLMag: 0.89,
+        gammaLAngDeg: 32.65,
+      ),
+      GainCircleExample(
+        name: 'Example 4-5 (8 GHz, Bilateral)',
+        s11Mag: 0.5,
+        s11AngDeg: -180,
+        s12Mag: 0.08,
+        s12AngDeg: 30,
+        s21Mag: 2.5,
+        s21AngDeg: 70,
+        s22Mag: 0.8,
+        s22AngDeg: -100,
+        z0: 50,
+        gainDbList: '10',
+        gammaSMag: 0.52,
+        gammaSAngDeg: 179.3,
+        gammaLMag: 0.1,
+        gammaLAngDeg: 97.0,
+      ),
+      GainCircleExample(
+        name: 'Example 4-8 (9 GHz, Bilateral)',
+        s11Mag: 0.55,
+        s11AngDeg: -150,
+        s12Mag: 0.04,
+        s12AngDeg: 20,
+        s21Mag: 2.82,
+        s21AngDeg: 180,
+        s22Mag: 0.45,
+        s22AngDeg: -30,
+        z0: 50,
+        gainDbList: '1,1.5',
+      ),
       GainCircleExample(
         name: 'Teaching Sample - Case A (K>1, |Δ|<1)',
         s11Mag: 0.005333331053280299,
@@ -162,45 +255,6 @@ class _GainCircleBilateralPageState extends State<GainCircleBilateralPage> {
         gainDbList: '6, 10, 14',
       ),
 
-      GainCircleExample(
-        name: 'Example 4-4 (1.8 GHz, Bilateral)',
-        s11Mag: 0.26,
-        s11AngDeg: -55,
-        s12Mag: 0.08,
-        s12AngDeg: 80,
-        s21Mag: 2.14,
-        s21AngDeg: 65,
-        s22Mag: 0.82,
-        s22AngDeg: -30,
-        z0: 50,
-        gainDbList: '6, 8, 10',
-      ),
-      GainCircleExample(
-        name: 'Example 4-5 (8 GHz, Bilateral)',
-        s11Mag: 0.5,
-        s11AngDeg: -180,
-        s12Mag: 0.08,
-        s12AngDeg: 30,
-        s21Mag: 2.5,
-        s21AngDeg: 70,
-        s22Mag: 0.8,
-        s22AngDeg: -100,
-        z0: 50,
-        gainDbList: '10',
-      ),
-      GainCircleExample(
-        name: 'Example 4-8 (9 GHz, Bilateral)',
-        s11Mag: 0.55,
-        s11AngDeg: -150,
-        s12Mag: 0.04,
-        s12AngDeg: 20,
-        s21Mag: 2.82,
-        s21AngDeg: 180,
-        s22Mag: 0.45,
-        s22AngDeg: -30,
-        z0: 50,
-        gainDbList: '1,1.5',
-      ),
       GainCircleExample(
         name: 'Example (Pozar 11.4 style)',
         s11Mag: 0.6,
@@ -258,6 +312,17 @@ class _GainCircleBilateralPageState extends State<GainCircleBilateralPage> {
     s22C2.dispose();
     z0C.dispose();
     gainDbListC.dispose();
+
+    // NEW disposes
+    gammaSC1.dispose();
+    gammaSC2.dispose();
+    gammaLC1.dispose();
+    gammaLC2.dispose();
+    zsC1.dispose();
+    zsC2.dispose();
+    zlC1.dispose();
+    zlC2.dispose();
+
     super.dispose();
   }
 
@@ -308,9 +373,7 @@ class _GainCircleBilateralPageState extends State<GainCircleBilateralPage> {
       _setComplexControllers(s21C1, s21C2, ex.S21);
       _setComplexControllers(s22C1, s22C2, ex.S22);
 
-      z0C.text = (ex.z0 == null)
-          ? ''
-          : ComplexFormatter.smartFormat(ex.z0!, useScientific: false, precision: 6);
+      z0C.text = (ex.z0 == null) ? '' : ComplexFormatter.smartFormat(ex.z0!, useScientific: false, precision: 6);
 
       gainDbListC.text = ex.gainDbList;
 
@@ -318,7 +381,31 @@ class _GainCircleBilateralPageState extends State<GainCircleBilateralPage> {
       _stepPanels.clear();
       _summaryTableData.clear();
       gainCirclesData.clear();
+      gainCirclesGammaS.clear();
       _expandedList = [];
+
+      _userGammaS = null;
+      _userGammaL = null;
+
+      _smithView = SmithPlaneView.gammaL;
+
+      _slMode = SourceLoadInputMode.gamma;
+
+      final z0UsedLocal = (ex.z0 == null) ? 50.0 : ex.z0!;
+
+      final Complex gs = ex.gammaS ?? const Complex(0, 0);
+      final Complex gl = ex.gammaL ?? const Complex(0, 0);
+
+      _setComplexControllers(gammaSC1, gammaSC2, gs);
+      _setComplexControllers(gammaLC1, gammaLC2, gl);
+
+      _setComplexControllers(zsC1, zsC2, Complex(z0UsedLocal, 0));
+      _setComplexControllers(zlC1, zlC2, Complex(z0UsedLocal, 0));
+    });
+
+    // 外部强制同步一次 Z 和 Γ
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _syncSourceLoadByMode();
     });
 
     if (autoCalculate) {
@@ -340,20 +427,106 @@ class _GainCircleBilateralPageState extends State<GainCircleBilateralPage> {
     _applyExample(_examples[_exampleIndex], autoCalculate: true);
   }
 
+  double _z0ForConversion() {
+    final s = z0C.text.trim();
+    if (s.isEmpty) return 50.0;
+    final v = double.tryParse(s);
+    return v ?? 50.0;
+  }
+
+  Complex? _tryParseComplexControllers(TextEditingController c1, TextEditingController c2) {
+    try {
+      return ComplexParser.parseUniversal(_joinInput(c1, c2), _currentFormat);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Complex? _gammaFromZ(Complex z, double z0) {
+    final denom = z + Complex(z0, 0);
+    if (denom.modulus < _eps) return null;
+    return (z - Complex(z0, 0)) / denom;
+  }
+
+  Complex? _zFromGamma(Complex g, double z0) {
+    final denom = Complex(1, 0) - g;
+    if (denom.modulus < _eps) return null;
+    return Complex(z0, 0) * (Complex(1, 0) + g) / denom;
+  }
+
+  void _syncSourceLoadByMode({bool force = false}) {
+    if (_isSyncingSL) return;
+    _isSyncingSL = true;
+
+    Complex? _gammaFromZ(Complex z, double z0) {
+      final denom = z + Complex(z0, 0);
+      if (denom.modulus < _eps) return null;
+      return (z - Complex(z0, 0)) / denom;
+    }
+
+    Complex? _zFromGamma(Complex g, double z0) {
+      final denom = Complex(1, 0) - g;
+      if (denom.modulus < _eps) return null;
+      return Complex(z0, 0) * (Complex(1, 0) + g) / denom;
+    }
+
+    final z0 = _z0ForConversion();
+
+    if (_slMode == SourceLoadInputMode.gamma) {
+      final gs = _tryParseComplexControllers(gammaSC1, gammaSC2);
+      final gl = _tryParseComplexControllers(gammaLC1, gammaLC2);
+
+      if (gs != null) {
+        final zs = _zFromGamma(gs, z0);
+        if (zs != null) _setComplexControllers(zsC1, zsC2, zs);
+      }
+      if (gl != null) {
+        final zl = _zFromGamma(gl, z0);
+        if (zl != null) _setComplexControllers(zlC1, zlC2, zl);
+      }
+    } else {
+      final zs = _tryParseComplexControllers(zsC1, zsC2);
+      final zl = _tryParseComplexControllers(zlC1, zlC2);
+
+      if (zs != null) {
+        final gs = _gammaFromZ(zs, z0);
+        if (gs != null) _setComplexControllers(gammaSC1, gammaSC2, gs);
+      }
+      if (zl != null) {
+        final gl = _gammaFromZ(zl, z0);
+        if (gl != null) _setComplexControllers(gammaLC1, gammaLC2, gl);
+      }
+    }
+
+    _isSyncingSL = false;
+  }
+
+  void _setSourceLoadMode(SourceLoadInputMode m) {
+    if (m == _slMode) return;
+    setState(() {
+      _slMode = m;
+    });
+    _syncSourceLoadByMode();
+  }
+
   // Format switching
   void switchAllFormat(ComplexInputFormat newFormat) {
     if (newFormat == _currentFormat) return;
 
     setState(() {
       void convert(TextEditingController c1, TextEditingController c2) {
-        final c = ComplexParser.parseUniversal(_joinInput(c1, c2), _currentFormat);
-        if (newFormat == ComplexInputFormat.cartesian) {
-          c1.text = ComplexFormatter.smartFormat(c.real, useScientific: false, precision: 6);
-          c2.text = ComplexFormatter.smartFormat(c.imaginary, useScientific: false, precision: 6);
-        } else {
-          c1.text = ComplexFormatter.smartFormat(c.modulus, useScientific: false, precision: 6);
-          double angle = (newFormat == ComplexInputFormat.polarDegree) ? c.phase() * 180 / pi : c.phase();
-          c2.text = ComplexFormatter.smartFormat(angle, useScientific: false, precision: 6);
+        try {
+          final c = ComplexParser.parseUniversal(_joinInput(c1, c2), _currentFormat);
+          if (newFormat == ComplexInputFormat.cartesian) {
+            c1.text = ComplexFormatter.smartFormat(c.real, useScientific: false, precision: 6);
+            c2.text = ComplexFormatter.smartFormat(c.imaginary, useScientific: false, precision: 6);
+          } else {
+            c1.text = ComplexFormatter.smartFormat(c.modulus, useScientific: false, precision: 6);
+            double angle = (newFormat == ComplexInputFormat.polarDegree) ? c.phase() * 180 / pi : c.phase();
+            c2.text = ComplexFormatter.smartFormat(angle, useScientific: false, precision: 6);
+          }
+        } catch (_) {
+          // keep old if cannot parse
         }
       }
 
@@ -361,8 +534,15 @@ class _GainCircleBilateralPageState extends State<GainCircleBilateralPage> {
       convert(s12C1, s12C2);
       convert(s21C1, s21C2);
       convert(s22C1, s22C2);
+      convert(gammaSC1, gammaSC2);
+      convert(gammaLC1, gammaLC2);
+      convert(zsC1, zsC2);
+      convert(zlC1, zlC2);
 
       _currentFormat = newFormat;
+
+      _syncSourceLoadByMode();
+
       if (_hasCalculated) _onCalculatePressed();
     });
   }
@@ -526,7 +706,6 @@ class _GainCircleBilateralPageState extends State<GainCircleBilateralPage> {
     );
   }
 
-
   String _escapeLatexText(String s) {
     return s
         .replaceAll(r'\', r'\\')
@@ -648,12 +827,26 @@ class _GainCircleBilateralPageState extends State<GainCircleBilateralPage> {
     return Complex(0, sqrt(-x)); // j*sqrt(|x|)
   }
 
+  // 判断用户输入点是否在圆内（稳定圆或增益圆）
+  bool _isInsideCircle(Complex p, Complex c, double r) {
+    if (!r.isFinite) return false;
+    return (p - c).modulus <= r + 1e-12; // 给一点浮点容差
+  }
+
+// 判断用户输入点是否在圆外（稳定圆或增益圆）
+  bool _isOutsideCircle(Complex p, Complex c, double r) {
+    if (!r.isFinite) return false;
+    return (p - c).modulus >= r - 1e-12;
+  }
+
+// 判断复数是否是被动的（m<1）
   bool _isPassive(Complex? g) {
     if (g == null) return false;
     final m = g.modulus;
     return m.isFinite && m < 1;
   }
 
+// 从两个候选复数中选择一个被动的值（优先选择 m < 1）
   Complex? _choosePassivePrefer(Complex? minus, Complex? plus) {
     final mOk = _isPassive(minus);
     final pOk = _isPassive(plus);
@@ -667,6 +860,182 @@ class _GainCircleBilateralPageState extends State<GainCircleBilateralPage> {
     return (minus.modulus <= plus.modulus) ? minus : plus;
   }
 
+  String? _optionalNumberValidator(String? v) {
+    final s = (v ?? '').trim();
+    if (s.isEmpty) return null;
+    return commonValidator(v);
+  }
+
+  Widget _modeBtn(String text, SourceLoadInputMode mode) {
+    final selected = _slMode == mode;
+    return ElevatedButton(
+      onPressed: () => _setSourceLoadMode(mode),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: selected ? Colors.deepPurple : Colors.grey[200],
+        foregroundColor: selected ? Colors.white : Colors.black87,
+        elevation: selected ? 1 : 0,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(999)),
+      ),
+      child: Text(text, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+    );
+  }
+
+  Widget _buildSourceLoadSection() {
+    final gammaEnabled = _slMode == SourceLoadInputMode.gamma;
+    final zEnabled = _slMode == SourceLoadInputMode.impedance;
+
+    Widget lockWrap({required bool enabled, required Widget child}) {
+      return Opacity(
+        opacity: enabled ? 1.0 : 0.55,
+        child: AbsorbPointer(absorbing: !enabled, child: child),
+      );
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF6F0FF),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.deepPurple.shade100),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.swap_horiz, color: Colors.deepPurple),
+              const SizedBox(width: 8),
+              const Expanded(
+                child: Text(
+                  'Source/Load Inputs (Zs/ZL ↔ Γs/ΓL)',
+                  style: TextStyle(fontWeight: FontWeight.bold, color: Colors.deepPurple),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Switch mode locks the other inputs. Values auto-convert using current Z0 (empty = 50Ω).',
+            style: TextStyle(fontSize: 12, color: Colors.grey[700]),
+          ),
+          const SizedBox(height: 10),
+
+          // mode buttons
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              _modeBtn('Γ mode (Γs/ΓL)', SourceLoadInputMode.gamma),
+              _modeBtn('Z mode (Zs/ZL)', SourceLoadInputMode.impedance),
+            ],
+          ),
+
+          const SizedBox(height: 14),
+
+          // Γ group
+          const Text(
+            'Γ inputs',
+            style: TextStyle(fontWeight: FontWeight.w700, color: Colors.black87),
+          ),
+          const SizedBox(height: 8),
+          lockWrap(
+            enabled: gammaEnabled,
+            child: Column(
+              children: [
+                ComplexInputRow(
+                  format: _currentFormat,
+                  ctrl1: gammaSC1,
+                  ctrl2: gammaSC2,
+                  paramName: 'Γs',
+                  validator: _optionalNumberValidator,
+                  onAnyChanged: () {
+                    _syncSourceLoadByMode();
+                    _onInputChanged();
+                  },
+                  onSubmit: () {
+                    _syncSourceLoadByMode();
+                    _onCalculatePressed();
+                  },
+                  action1: TextInputAction.next,
+                  action2: TextInputAction.next,
+                ),
+                ComplexInputRow(
+                  format: _currentFormat,
+                  ctrl1: gammaLC1,
+                  ctrl2: gammaLC2,
+                  paramName: 'ΓL',
+                  validator: _optionalNumberValidator,
+                  onAnyChanged: () {
+                    _syncSourceLoadByMode();
+                    _onInputChanged();
+                  },
+                  onSubmit: () {
+                    _syncSourceLoadByMode();
+                    _onCalculatePressed();
+                  },
+                  action1: TextInputAction.next,
+                  action2: TextInputAction.next,
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 12),
+
+          // Z group
+          const Text(
+            'Z inputs',
+            style: TextStyle(fontWeight: FontWeight.w700, color: Colors.black87),
+          ),
+          const SizedBox(height: 8),
+          lockWrap(
+            enabled: zEnabled,
+            child: Column(
+              children: [
+                ComplexInputRow(
+                  format: _currentFormat,
+                  ctrl1: zsC1,
+                  ctrl2: zsC2,
+                  paramName: 'Zs (Ω)',
+                  validator: _optionalNumberValidator,
+                  onAnyChanged: () {
+                    _syncSourceLoadByMode();
+                    _onInputChanged();
+                  },
+                  onSubmit: () {
+                    _syncSourceLoadByMode();
+                    _onCalculatePressed();
+                  },
+                  action1: TextInputAction.next,
+                  action2: TextInputAction.next,
+                ),
+                ComplexInputRow(
+                  format: _currentFormat,
+                  ctrl1: zlC1,
+                  ctrl2: zlC2,
+                  paramName: 'ZL (Ω)',
+                  validator: _optionalNumberValidator,
+                  onAnyChanged: () {
+                    _syncSourceLoadByMode();
+                    _onInputChanged();
+                  },
+                  onSubmit: () {
+                    _syncSourceLoadByMode();
+                    _onCalculatePressed();
+                  },
+                  action1: TextInputAction.next,
+                  action2: TextInputAction.next,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   // Core calculation
   void _onCalculatePressed() {
     if (!_formKey.currentState!.validate()) return;
@@ -676,6 +1045,7 @@ class _GainCircleBilateralPageState extends State<GainCircleBilateralPage> {
 
       _stepPanels.clear();
       gainCirclesData.clear();
+      gainCirclesGammaS.clear();
       _summaryTableData.clear();
       _expandedList = [];
 
@@ -689,6 +1059,8 @@ class _GainCircleBilateralPageState extends State<GainCircleBilateralPage> {
         final z0Used = (z0Text.isEmpty) ? 50.0 : double.parse(z0Text);
         _z0Used = z0Used;
         _z0UsedDefault = z0Text.isEmpty;
+
+        _syncSourceLoadByMode();
 
         final S11abs = S11.modulus, S11abs2 = S11abs * S11abs;
         final S12abs = S12.modulus;
@@ -737,7 +1109,8 @@ class _GainCircleBilateralPageState extends State<GainCircleBilateralPage> {
         final muP = (denomMuP < _eps) ? double.nan : (1 - S22abs2) / denomMuP;
 
         // 5) Stability decisions
-        final stableKDelta = (!K.isNaN) && (K.isInfinite ? (!K.isNegative) : (K > 1)) && (deltaAbs < 1);
+        final stableKDelta =
+            (!K.isNaN) && (K.isInfinite ? (!K.isNegative) : (K > 1)) && (deltaAbs < 1);
         final stableKt = (!Kt.isNaN) && (Kt.isInfinite ? (!Kt.isNegative) : (Kt > 1));
         final stableMu = (!mu.isNaN) && (mu > 1);
         final stableMuP = (!muP.isNaN) && (muP > 1);
@@ -752,15 +1125,11 @@ class _GainCircleBilateralPageState extends State<GainCircleBilateralPage> {
             title: '0. Case Selection (A / B / C)',
             content: [
               _text('We classify the device into three teaching cases:', bold: true),
-
               _texScroll(r'\bullet\ \text{Case A: } K > 1 \text{ and } |\Delta| < 1 \to \text{Unconditionally stable}'),
               _texScroll(r'\bullet\ \text{Case B: } K > 1 \text{ and } |\Delta| > 1 \to \text{Potentially unstable}'),
               _texScroll(r'\bullet\ \text{Case C: } K \le 1 \to \text{Potentially unstable}'),
-
               const Divider(),
-
               _text('Chosen Case Analysis:', bold: true),
-
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(12),
@@ -777,33 +1146,25 @@ class _GainCircleBilateralPageState extends State<GainCircleBilateralPage> {
                       style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.blueAccent),
                     ),
                     const SizedBox(height: 8),
-
                     const Text("Condition:",
                         style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Colors.black54)),
-                    // 渲染 rule
                     SingleChildScrollView(
                       scrollDirection: Axis.horizontal,
                       child: Math.tex(_caseInfo.rule, textStyle: const TextStyle(fontSize: 15, color: Colors.black87)),
                     ),
                     const SizedBox(height: 8),
-
                     const Text("Max Gain Strategy:",
                         style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Colors.black54)),
-                    // 渲染 maxGainRule
                     SingleChildScrollView(
                       scrollDirection: Axis.horizontal,
-                      child:
-                      Math.tex(_caseInfo.maxGainRule, textStyle: const TextStyle(fontSize: 15, color: Colors.black87)),
+                      child: Math.tex(_caseInfo.maxGainRule, textStyle: const TextStyle(fontSize: 15, color: Colors.black87)),
                     ),
                     const SizedBox(height: 8),
-
                     const Text("Conjugate Match Strategy:",
                         style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Colors.black54)),
-                    // 渲染 conjMatchRule
                     SingleChildScrollView(
                       scrollDirection: Axis.horizontal,
-                      child:
-                      Math.tex(_caseInfo.conjMatchRule, textStyle: const TextStyle(fontSize: 15, color: Colors.black87)),
+                      child: Math.tex(_caseInfo.conjMatchRule, textStyle: const TextStyle(fontSize: 15, color: Colors.black87)),
                     ),
                   ],
                 ),
@@ -1192,6 +1553,7 @@ class _GainCircleBilateralPageState extends State<GainCircleBilateralPage> {
 
           final rp = sqrt(numeratorRp) / denominatorCp.abs();
 
+          // ΓL-plane circles
           gainCirclesData.add(
             GainCircleData(
               center: Cp,
@@ -1412,6 +1774,431 @@ class _GainCircleBilateralPageState extends State<GainCircleBilateralPage> {
           ),
         );
 
+        // =========================================================
+        // 5) Stability Circles (Input & Output)
+        // =========================================================
+
+        final denomS = S11abs2 - deltaAbs2;
+        final denomL = S22abs2 - deltaAbs2;
+
+        Complex? cS, cL;
+        double? rS, rL;
+
+        if (denomS.abs() > _eps) {
+          final tmpS = S11 - delta * S22.conjugate();
+          cS = tmpS.conjugate() / Complex(denomS, 0);
+          rS = absS12S21 / denomS.abs();
+        }
+
+        if (denomL.abs() > _eps) {
+          final tmpL = S22 - delta * S11.conjugate();
+          cL = tmpL.conjugate() / Complex(denomL, 0);
+          rL = absS12S21 / denomL.abs();
+        }
+
+        if (cL != null && rL != null && rL!.isFinite) {
+          gainCirclesData.add(
+            GainCircleData(
+              center: cL!,
+              radius: rL!,
+              label: 'Output Stability',
+              color: Colors.black87,
+            ),
+          );
+        }
+
+        if (cS != null && rS != null && rS!.isFinite) {
+          gainCirclesGammaS.add(
+            GainCircleData(
+              center: cS!,
+              radius: rS!,
+              label: 'Input Stability',
+              color: Colors.black54,
+            ),
+          );
+        }
+
+        final List<Widget> stCircleWidgets = [];
+
+        stCircleWidgets.add(_text('Formulas (exact center form with double-conjugate):', bold: true));
+        stCircleWidgets.add(_texScroll(
+          r'c_S=\frac{\left(S_{11}-\Delta S_{22}^*\right)^*}{|S_{11}|^2-|\Delta|^2},\quad\;'
+          r'r_S=\frac{|S_{12}S_{21}|}{\left||S_{11}|^2-|\Delta|^2\right|}',
+        ));
+        stCircleWidgets.add(_texScroll(
+          r'c_L=\frac{\left(S_{22}-\Delta S_{11}^*\right)^*}{|S_{22}|^2-|\Delta|^2},\quad\;'
+          r'r_L=\frac{|S_{12}S_{21}|}{\left||S_{22}|^2-|\Delta|^2\right|}',
+        ));
+
+        stCircleWidgets.add(const Divider());
+        stCircleWidgets.add(_text('Substitution (insert values; not simplified):', bold: true));
+
+        stCircleWidgets.add(_texScroll(
+          r'|S_{11}|^2-|\Delta|^2 = ' +
+              _texNumSafe(S11abs2) +
+              r' - ' +
+              _texNumSafe(deltaAbs2) +
+              r' = ' +
+              _texNumSafe(denomS),
+        ));
+        stCircleWidgets.add(_texScroll(
+          r'|S_{22}|^2-|\Delta|^2 = ' +
+              _texNumSafe(S22abs2) +
+              r' - ' +
+              _texNumSafe(deltaAbs2) +
+              r' = ' +
+              _texNumSafe(denomL),
+        ));
+        stCircleWidgets.add(_texScroll(
+          r'|S_{12}S_{21}| = |S_{12}|\cdot|S_{21}| = ' +
+              _texNumSafe(S12abs) +
+              r'\cdot' +
+              _texNumSafe(S21abs) +
+              r' = ' +
+              _texNumSafe(absS12S21),
+        ));
+
+        stCircleWidgets.add(const SizedBox(height: 6));
+        stCircleWidgets.add(_texScroll(
+          r'\left(S_{11}-\Delta S_{22}^*\right)^*'
+          r' = \left(' +
+              ComplexFormatter.latex(S11, _currentFormat, precision: 3) +
+              r' - (' +
+              ComplexFormatter.latex(delta, _currentFormat, precision: 3) +
+              r')(' +
+              ComplexFormatter.latex(S22.conjugate(), _currentFormat, precision: 3) +
+              r')\right)^*',
+        ));
+        stCircleWidgets.add(_texScroll(
+          r'\left(S_{22}-\Delta S_{11}^*\right)^*'
+          r' = \left(' +
+              ComplexFormatter.latex(S22, _currentFormat, precision: 3) +
+              r' - (' +
+              ComplexFormatter.latex(delta, _currentFormat, precision: 3) +
+              r')(' +
+              ComplexFormatter.latex(S11.conjugate(), _currentFormat, precision: 3) +
+              r')\right)^*',
+        ));
+
+        stCircleWidgets.add(const Divider());
+        stCircleWidgets.add(_text('Results:', bold: true));
+
+        if (cS == null || rS == null) {
+          stCircleWidgets.add(_texScroll(
+            r'c_S,\ r_S:\ \text{undefined (}|S_{11}|^2-|\Delta|^2\approx 0\text{)}',
+          ));
+        } else {
+          stCircleWidgets.add(_texScroll(r'c_S = ' + ComplexFormatter.latex(cS, _currentFormat, precision: 3)));
+          stCircleWidgets.add(_texScroll(r'r_S = ' + _texNumSafe(rS!)));
+        }
+
+        if (cL == null || rL == null) {
+          stCircleWidgets.add(_texScroll(
+            r'c_L,\ r_L:\ \text{undefined (}|S_{22}|^2-|\Delta|^2\approx 0\text{)}',
+          ));
+        } else {
+          stCircleWidgets.add(_texScroll(r'c_L = ' + ComplexFormatter.latex(cL, _currentFormat, precision: 3)));
+          stCircleWidgets.add(_texScroll(r'r_L = ' + _texNumSafe(rL!)));
+        }
+
+        stCircleWidgets.add(const Divider());
+
+        Complex? currentGs, currentGl;
+        if (_slMode == SourceLoadInputMode.impedance) {
+          final zInputS = ComplexParser.parseUniversal(_joinInput(zsC1, zsC2), _currentFormat);
+          final zInputL = ComplexParser.parseUniversal(_joinInput(zlC1, zlC2), _currentFormat);
+          Complex? calcGamma(Complex z) {
+            final denom = z + Complex(_z0Used, 0);
+            return denom.modulus < _eps ? null : (z - Complex(_z0Used, 0)) / denom;
+          }
+          currentGs = calcGamma(zInputS);
+          currentGl = calcGamma(zInputL);
+        } else {
+          currentGs = ComplexParser.parseUniversal(_joinInput(gammaSC1, gammaSC2), _currentFormat);
+          currentGl = ComplexParser.parseUniversal(_joinInput(gammaLC1, gammaLC2), _currentFormat);
+        }
+
+        stCircleWidgets.add(const SizedBox(height: 16));
+        stCircleWidgets.add(_text('Reflection Coefficients (Γin & Γout):', bold: true));
+        stCircleWidgets.add(_texScroll(
+          r'\Gamma_{in} = S_{11} + \frac{S_{12}S_{21}\Gamma_L}{1 - S_{22}\Gamma_L},\quad\;'
+          r'\Gamma_{out} = S_{22} + \frac{S_{12}S_{21}\Gamma_S}{1 - S_{11}\Gamma_S}',
+        ));
+        stCircleWidgets.add(const Divider());
+
+        final s11Str = ComplexFormatter.latex(S11, _currentFormat, precision: 3);
+        final s12Str = ComplexFormatter.latex(S12, _currentFormat, precision: 3);
+        final s21Str = ComplexFormatter.latex(S21, _currentFormat, precision: 3);
+        final s22Str = ComplexFormatter.latex(S22, _currentFormat, precision: 3);
+
+        if (currentGl != null) {
+          final glStr = ComplexFormatter.latex(currentGl, _currentFormat, precision: 3);
+          final denomIn = Complex(1, 0) - (S22 * currentGl);
+
+          stCircleWidgets.add(_text('1. Compute Γin:', bold: true));
+
+          if (denomIn.modulus < _eps) {
+            stCircleWidgets.add(_texScroll(r'\Gamma_{in}:\ \text{undefined } (1 - S_{22}\Gamma_L \approx 0)'));
+          } else {
+            final gammaIn = S11 + (S12 * S21 * currentGl) / denomIn;
+
+            stCircleWidgets.add(_texScroll(
+                r'\Gamma_{in} = (' + s11Str + r') + \frac{(' + s12Str + r')(' + s21Str + r')(' + glStr + r')}{1 - (' + s22Str + r')(' + glStr + r')}'
+            ));
+
+            stCircleWidgets.add(_texScroll(r'= ' + ComplexFormatter.latex(gammaIn, _currentFormat, precision: 4)));
+            stCircleWidgets.add(_texScroll(r'\implies \Gamma_{in}^* = ' + ComplexFormatter.latex(gammaIn.conjugate(), _currentFormat, precision: 4)));
+          }
+        } else {
+          stCircleWidgets.add(_text('1. Compute Γin:', bold: true));
+          stCircleWidgets.add(_texScroll(r'\Gamma_{in}: \text{Cannot compute (Invalid } \Gamma_L)'));
+        }
+
+        stCircleWidgets.add(const SizedBox(height: 12));
+
+        if (currentGs != null) {
+          final gsStr = ComplexFormatter.latex(currentGs, _currentFormat, precision: 3);
+          final denomOut = Complex(1, 0) - (S11 * currentGs);
+
+          stCircleWidgets.add(_text('2. Compute Γout:', bold: true));
+
+          if (denomOut.modulus < _eps) {
+            stCircleWidgets.add(_texScroll(r'\Gamma_{out}:\ \text{undefined } (1 - S_{11}\Gamma_S \approx 0)'));
+          } else {
+            final gammaOut = S22 + (S12 * S21 * currentGs) / denomOut;
+
+            stCircleWidgets.add(_texScroll(
+                r'\Gamma_{out} = (' + s22Str + r') + \frac{(' + s12Str + r')(' + s21Str + r')(' + gsStr + r')}{1 - (' + s11Str + r')(' + gsStr + r')}'
+            ));
+
+            stCircleWidgets.add(_texScroll(r'= ' + ComplexFormatter.latex(gammaOut, _currentFormat, precision: 4)));
+            stCircleWidgets.add(_texScroll(r'\implies \Gamma_{out}^* = ' + ComplexFormatter.latex(gammaOut.conjugate(), _currentFormat, precision: 4)));
+          }
+        } else {
+          stCircleWidgets.add(_text('2. Compute Γout:', bold: true));
+          stCircleWidgets.add(_texScroll(r'\Gamma_{out}: \text{Cannot compute (Invalid } \Gamma_S)'));
+        }
+
+        _stepPanels.add(
+          StepPanel(
+            title: '5. Stability Circles & Refl. Coefficients',
+            content: stCircleWidgets,
+          ),
+        );
+
+        // =========================================================
+        // 6) User Point Validation (Γs, ΓL) - Enhanced with Teaching Steps
+        // =========================================================
+        final List<Widget> checkWidgets = [];
+        Complex? finalGs, finalGl;
+
+        if (_slMode == SourceLoadInputMode.impedance) {
+          checkWidgets.add(_text('Input Mode: Impedance (Z)', bold: true));
+          checkWidgets.add(_text('We must convert user input Z to Γ before checking circles.', bold: false));
+
+          final zInputS = ComplexParser.parseUniversal(_joinInput(zsC1, zsC2), _currentFormat);
+          final zInputL = ComplexParser.parseUniversal(_joinInput(zlC1, zlC2), _currentFormat);
+
+          checkWidgets.add(_texScroll(r'Z_S = ' + ComplexFormatter.latex(zInputS, _currentFormat, precision: 3) + r'\,\Omega'));
+          checkWidgets.add(_texScroll(r'Z_L = ' + ComplexFormatter.latex(zInputL, _currentFormat, precision: 3) + r'\,\Omega'));
+          checkWidgets.add(_texScroll(r'Z_0 = ' + ComplexFormatter.smartFormat(_z0Used) + r'\,\Omega'));
+          checkWidgets.add(const Divider());
+
+          checkWidgets.add(_text('Conversion Formula:', bold: true));
+          checkWidgets.add(_texScroll(r'\Gamma = \frac{Z - Z_0}{Z + Z_0}'));
+          checkWidgets.add(const SizedBox(height: 8));
+
+          Complex? calcGamma(Complex z) {
+            final denom = z + Complex(_z0Used, 0);
+            if (denom.modulus < _eps) return null;
+            return (z - Complex(_z0Used, 0)) / denom;
+          }
+
+          finalGs = calcGamma(zInputS);
+          finalGl = calcGamma(zInputL);
+
+          checkWidgets.add(_text('Step-by-step Substitution:', bold: true));
+
+          if (finalGs != null) {
+            final numS = zInputS - Complex(_z0Used, 0);
+            final denS = zInputS + Complex(_z0Used, 0);
+            checkWidgets.add(_texScroll(
+                r'\Gamma_S = \frac{' +
+                    ComplexFormatter.latex(zInputS, _currentFormat, precision: 2) +
+                    r' - ' + ComplexFormatter.smartFormat(_z0Used) +
+                    r'}{' +
+                    ComplexFormatter.latex(zInputS, _currentFormat, precision: 2) +
+                    r' + ' + ComplexFormatter.smartFormat(_z0Used) +
+                    r'}'
+            ));
+            checkWidgets.add(_texScroll(
+                r'= \frac{' + ComplexFormatter.latex(numS, _currentFormat, precision: 3) +
+                    r'}{' + ComplexFormatter.latex(denS, _currentFormat, precision: 3) +
+                    r'} = ' + ComplexFormatter.latex(finalGs, _currentFormat, precision: 4)
+            ));
+            checkWidgets.add(const SizedBox(height: 10));
+          } else {
+            checkWidgets.add(_text(r'Γs undefined (Z_S + Z_0 ≈ 0)'));
+          }
+
+          if (finalGl != null) {
+            final numL = zInputL - Complex(_z0Used, 0);
+            final denL = zInputL + Complex(_z0Used, 0);
+            checkWidgets.add(_texScroll(
+                r'\Gamma_L = \frac{' +
+                    ComplexFormatter.latex(zInputL, _currentFormat, precision: 2) +
+                    r' - ' + ComplexFormatter.smartFormat(_z0Used) +
+                    r'}{' +
+                    ComplexFormatter.latex(zInputL, _currentFormat, precision: 2) +
+                    r' + ' + ComplexFormatter.smartFormat(_z0Used) +
+                    r'}'
+            ));
+            checkWidgets.add(_texScroll(
+                r'= \frac{' + ComplexFormatter.latex(numL, _currentFormat, precision: 3) +
+                    r'}{' + ComplexFormatter.latex(denL, _currentFormat, precision: 3) +
+                    r'} = ' + ComplexFormatter.latex(finalGl, _currentFormat, precision: 4)
+            ));
+          } else {
+            checkWidgets.add(_text(r'ΓL undefined (Z_L + Z_0 ≈ 0)'));
+          }
+
+        } else {
+          // Gamma 模式：直接读取
+          checkWidgets.add(_text('Input Mode: Reflection Coefficient (Γ)', bold: true));
+          checkWidgets.add(_text('Using values directly from input fields:', bold: false));
+
+          finalGs = ComplexParser.parseUniversal(_joinInput(gammaSC1, gammaSC2), _currentFormat);
+          finalGl = ComplexParser.parseUniversal(_joinInput(gammaLC1, gammaLC2), _currentFormat);
+
+          if (finalGs != null) checkWidgets.add(_texScroll(r'\Gamma_S = ' + ComplexFormatter.latex(finalGs, _currentFormat, precision: 4)));
+          if (finalGl != null) checkWidgets.add(_texScroll(r'\Gamma_L = ' + ComplexFormatter.latex(finalGl, _currentFormat, precision: 4)));
+        }
+
+
+        _userGammaS = finalGs;
+        _userGammaL = finalGl;
+
+
+        checkWidgets.add(const Divider());
+
+
+        if (finalGs == null || finalGl == null) {
+          checkWidgets.add(_text('Error: Γs or ΓL is invalid/undefined. Cannot proceed with check.', bold: true));
+        } else {
+
+          void addDistanceCheck(String title, Complex pt, Complex c, double r, String ptLabel, String cLabel, String rLabel) {
+            final diff = pt - c;
+            final dist = diff.modulus;
+            final inside = dist <= r + 1e-12;
+
+            checkWidgets.add(_text(title + (inside ? ' Inside' : ' Outside'), bold: true));
+            // 1. 点和圆心的相减
+            checkWidgets.add(_texScroll(
+                r'd = |' + ptLabel + r' - ' + cLabel + r'| = \left|' +
+                    ComplexFormatter.latex(pt, _currentFormat, precision: 3) + r' - (' +
+                    ComplexFormatter.latex(c, _currentFormat, precision: 3) + r')\right|'
+            ));
+            // 2. 差值和模长的结果
+            checkWidgets.add(_texScroll(
+                r'= \left|' + ComplexFormatter.latex(diff, _currentFormat, precision: 3) + r'\right| = ' +
+                    ComplexFormatter.smartFormat(dist, precision: 4)
+            ));
+            // 3.  d 与 r
+            checkWidgets.add(_texScroll(
+                r'd = ' + ComplexFormatter.smartFormat(dist, precision: 4) +
+                    (inside ? r' \le ' : r' > ') +
+                    rLabel + r' (' + ComplexFormatter.smartFormat(r, precision: 4) + r') \implies \text{' +
+                    (inside ? 'Inside' : 'Outside') + r'}'
+            ));
+            checkWidgets.add(const SizedBox(height: 8));
+          }
+
+          // 1) Stability circles check
+          if (cS != null && rS != null) {
+            addDistanceCheck('Input stability circle (ΓS-plane):', finalGs, cS!, rS!, r'\Gamma_S', r'c_S', r'r_S');
+          } else {
+            checkWidgets.add(_text('Input stability circle undefined.', bold: true));
+          }
+
+          if (cL != null && rL != null) {
+            addDistanceCheck('Output stability circle (ΓL-plane):', finalGl, cL!, rL!, r'\Gamma_L', r'c_L', r'r_L');
+          } else {
+            checkWidgets.add(_text('Output stability circle undefined.', bold: true));
+          }
+
+          checkWidgets.add(const Divider());
+
+          // 2) Gain circle checks (ΓL-plane)
+          final gainOnly = gainCirclesData.where((e) => e.label != 'Output Stability').toList();
+
+          if (gainOnly.isEmpty) {
+            checkWidgets.add(_text('No gain circles available to check.', bold: true));
+          } else {
+            checkWidgets.add(_text('Operating power gain circles (ΓL-plane):', bold: true));
+            for (int i = 0; i < gainOnly.length; i++) {
+              final gCircle = gainOnly[i];
+              addDistanceCheck('${gCircle.label}:', finalGl, gCircle.center, gCircle.radius, r'\Gamma_L', 'C_{p${i+1}}', 'r_{p${i+1}}');
+            }
+          }
+
+          checkWidgets.add(const Divider());
+
+          // 3) Overall Conclusion
+          final okInStabS = (cS != null && rS != null) ? _isInsideCircle(finalGs, cS!, rS!) : false;
+          final okInStabL = (cL != null && rL != null) ? _isInsideCircle(finalGl, cL!, rL!) : false;
+
+          bool okInAnyGain = false;
+          if (gainOnly.isEmpty) {
+            okInAnyGain = true;
+          } else {
+            for (final gCircle in gainOnly) {
+              if (_isInsideCircle(finalGl, gCircle.center, gCircle.radius)) {
+                okInAnyGain = true;
+                break;
+              }
+            }
+          }
+
+          final overall = okInStabS && okInStabL && okInAnyGain;
+
+          checkWidgets.add(
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: overall ? Colors.green[50] : Colors.red[50],
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: overall ? Colors.green.shade200 : Colors.red.shade200),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    overall ? '✅ Point Valid' : '❌ Point Invalid / Unstable / Wrong Gain',
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                      color: overall ? Colors.green[800] : Colors.red[800],
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text("Conditions met:", style: TextStyle(color: Colors.grey[800], fontSize: 13, fontWeight: FontWeight.bold)),
+                  Text(" • Input Stability: ${okInStabS ? 'Pass' : 'Fail'}", style: TextStyle(color: Colors.black87, fontSize: 13)),
+                  Text(" • Output Stability: ${okInStabL ? 'Pass' : 'Fail'}", style: TextStyle(color: Colors.black87, fontSize: 13)),
+                  if (gainOnly.isNotEmpty)
+                    Text(" • Target Gain Reached: ${okInAnyGain ? 'Yes' : 'No'}", style: TextStyle(color: Colors.black87, fontSize: 13)),
+                ],
+              ),
+            ),
+          );
+        }
+
+        _stepPanels.add(
+          StepPanel(
+            title: '6. User Input Check & Conversion',
+            content: checkWidgets,
+          ),
+        );
         _expandedList = List.generate(_stepPanels.length, (_) => false);
       } catch (e) {
         debugPrint("Error: $e");
@@ -1536,7 +2323,6 @@ class _GainCircleBilateralPageState extends State<GainCircleBilateralPage> {
               ),
               const SizedBox(height: 16),
 
-              // Inputs with smooth Keyboard Action flow (Next -> Next -> ... -> Done)
               ComplexInputRow(
                 format: _currentFormat,
                 ctrl1: s11C1,
@@ -1584,6 +2370,9 @@ class _GainCircleBilateralPageState extends State<GainCircleBilateralPage> {
 
               const SizedBox(height: 12),
 
+              _buildSourceLoadSection(),
+              const SizedBox(height: 12),
+
               _buildScalarInput(
                 z0C,
                 'Z0 (Ohm)',
@@ -1592,7 +2381,10 @@ class _GainCircleBilateralPageState extends State<GainCircleBilateralPage> {
                   if (s.isEmpty) return null;
                   return commonValidator(val);
                 },
-                onAnyChanged: _onInputChanged,
+                onAnyChanged: () {
+                  _syncSourceLoadByMode();
+                  _onInputChanged();
+                },
                 onSubmit: _onCalculatePressed,
                 action: TextInputAction.next,
               ),
@@ -1647,7 +2439,7 @@ class _GainCircleBilateralPageState extends State<GainCircleBilateralPage> {
                   ),
                 ),
 
-                if (gainCirclesData.isNotEmpty)
+                if (gainCirclesData.isNotEmpty || gainCirclesGammaS.isNotEmpty)
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.all(16),
@@ -1660,16 +2452,78 @@ class _GainCircleBilateralPageState extends State<GainCircleBilateralPage> {
                     ),
                     child: Column(
                       children: [
-                        const Text(
-                          "Smith Chart Visualization",
-                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.deepPurple),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                _smithView == SmithPlaneView.gammaL
+                                    ? "Smith Chart (ΓL-plane): Gain Circles + Output Stability"
+                                    : "Smith Chart (ΓS-plane): Input Stability Circle",
+                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.deepPurple),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Wrap(
+                              spacing: 8,
+                              children: [
+                                ChoiceChip(
+                                  label: const Text('ΓL'),
+                                  selected: _smithView == SmithPlaneView.gammaL,
+                                  onSelected: (_) => setState(() => _smithView = SmithPlaneView.gammaL),
+                                  visualDensity: VisualDensity.compact,
+                                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                ),
+                                ChoiceChip(
+                                  label: const Text('ΓS'),
+                                  selected: _smithView == SmithPlaneView.gammaS,
+                                  onSelected: (_) => setState(() => _smithView = SmithPlaneView.gammaS),
+                                  visualDensity: VisualDensity.compact,
+                                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                ),
+                              ],
+                            ),
+                          ],
                         ),
-                        const SizedBox(height: 16),
-                        SizedBox(
-                          height: 350,
-                          child: SmithGainCirclePainter(
-                            gainCircles: gainCirclesData,
-                            canvasSize: 350,
+
+                        const SizedBox(height: 12),
+
+                        Padding(
+                          padding: const EdgeInsets.only(top: 8),
+                          child: Builder(
+                            builder: (_) {
+                              final circlesToDraw = (_smithView == SmithPlaneView.gammaL)
+                                  ? gainCirclesData
+                                  : gainCirclesGammaS;
+
+                              if (circlesToDraw.isEmpty) {
+                                return Container(
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: Colors.orange[50],
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(color: Colors.orange.shade200),
+                                  ),
+                                  child: Text(
+                                    _smithView == SmithPlaneView.gammaL
+                                        ? "No ΓL-plane circles to draw."
+                                        : "No ΓS-plane circles to draw (input stability circle undefined).",
+                                    style: const TextStyle(fontWeight: FontWeight.w600),
+                                  ),
+                                );
+                              }
+
+                              return SizedBox(
+                                height: 350,
+                                child: SmithGainCirclePainter(
+                                  gainCircles: circlesToDraw,
+                                  userPoint: _smithView == SmithPlaneView.gammaL
+                                      ? _userGammaL
+                                      : _userGammaS,
+                                  canvasSize: 350,
+                                ),
+                              );
+                            },
                           ),
                         ),
                       ],

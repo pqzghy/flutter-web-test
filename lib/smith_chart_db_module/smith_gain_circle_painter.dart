@@ -19,11 +19,13 @@ class GainCircleData {
 // Smith+增益圆可视化控件
 class SmithGainCirclePainter extends StatelessWidget {
   final List<GainCircleData> gainCircles;
+  final Complex? userPoint;  // 用户输入的伽马点
   final double canvasSize;
 
   const SmithGainCirclePainter({
     super.key,
     required this.gainCircles,
+    this.userPoint,  // 接收用户输入的点
     this.canvasSize = 420,
   });
 
@@ -34,7 +36,10 @@ class SmithGainCirclePainter extends StatelessWidget {
         width: canvasSize,
         height: canvasSize,
         child: CustomPaint(
-          painter: _SmithGainPainter(gainCircles: gainCircles),
+          painter: _SmithGainPainter(
+            gainCircles: gainCircles,
+            userPoint: userPoint,  // 传递用户输入的点
+          ),
         ),
       ),
     );
@@ -43,6 +48,7 @@ class SmithGainCirclePainter extends StatelessWidget {
 
 class _SmithGainPainter extends CustomPainter {
   final List<GainCircleData> gainCircles;
+  final Complex? userPoint;  // 用户输入的伽马点
 
   // 颜色列表，用于循环分配给增益圆
   final List<Color> circleColors = [
@@ -56,7 +62,10 @@ class _SmithGainPainter extends CustomPainter {
     Colors.pink,          // 粉
   ];
 
-  _SmithGainPainter({required this.gainCircles});
+  _SmithGainPainter({
+    required this.gainCircles,
+    this.userPoint,  // 接收用户输入的点
+  });
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -108,7 +117,6 @@ class _SmithGainPainter extends CustomPainter {
 
     // 1.4 等虚部圆（x-circles）
     final xValues = [-5, -2, -1, -0.5, -0.2, 5, 2, 1, 0.5, 0.2];
-    // 交换映射（Label Correction）
     final Map<double, double> jLabelSwap = {
       5: 0.2, 2: 0.5, 1: 1, 0.5: 2, 0.2: 5,
       -5: -0.2, -2: -0.5, -1: -1, -0.5: -2, -0.2: -5,
@@ -151,7 +159,6 @@ class _SmithGainPainter extends CustomPainter {
       double y_down = -y_up;
 
       if (x > 0) {
-        // +j
         double labelValue = (jLabelSwap[x] ?? x.toDouble());
         final pos = Offset(x_left * scale + scale, scale - y_up * scale);
         final label = TextPainter(
@@ -164,7 +171,6 @@ class _SmithGainPainter extends CustomPainter {
         label.layout();
         label.paint(canvas, Offset(pos.dx - label.width - 3, pos.dy - 7));
 
-        // -j
         double labelValueNeg = (jLabelSwap[-x] ?? (-x).toDouble());
         final posNeg = Offset(x_left * scale + scale, scale - y_down * scale);
         final labelNeg = TextPainter(
@@ -179,11 +185,10 @@ class _SmithGainPainter extends CustomPainter {
       }
     }
 
-    // ================= 2. 绘制增益圆 (重点优化部分) =================
+    // ================= 2. 绘制增益圆 =================
 
     for (int i = 0; i < gainCircles.length; i++) {
       final c = gainCircles[i];
-      // 循环选取鲜艳颜色
       final Color uniqueColor = circleColors[i % circleColors.length];
 
       final center = Offset(c.center.real * scale + scale, scale - c.center.imaginary * scale);
@@ -202,7 +207,7 @@ class _SmithGainPainter extends CustomPainter {
         ..style = PaintingStyle.fill;
       canvas.drawCircle(center, 4, centerPaint);
 
-      // 2.3 绘制标签 (新逻辑：分散在圆周上)
+      // 2.3 绘制标签
       final textSpan = TextSpan(
         text: c.label,
         style: TextStyle(
@@ -210,7 +215,6 @@ class _SmithGainPainter extends CustomPainter {
           fontWeight: FontWeight.bold,
           fontSize: 15,
           shadows: [
-            // 双重阴影，增强文字在网格线上的可读性
             Shadow(offset: const Offset(1.2, 1.2), blurRadius: 2.0, color: Colors.white),
             Shadow(offset: const Offset(-1.2, -1.2), blurRadius: 2.0, color: Colors.white),
           ],
@@ -223,27 +227,29 @@ class _SmithGainPainter extends CustomPainter {
       );
       tp.layout();
 
-      // --- 核心优化逻辑 ---
-      // 1. 角度轮转：第1个圆(i=0)在45度，第2个(i=1)在135度... 每次转90度
-      // 这样标签会分散到圆的四个象限，彻底解决重叠问题
       double angleStep = pi / 2;
-      double startAngle = -pi / 4; // 起始角度：右上角 (-45度, 因为Y轴向下)
-      double currentAngle = startAngle - (i * angleStep); // 逆时针旋转
+      double startAngle = -pi / 4;
+      double currentAngle = startAngle - (i * angleStep);
 
-      // 2. 距离计算：放在圆的边缘 (半径处)
-      // 特殊情况：如果圆非常小(缩成一点)，强制把标签往外推一点(25px)，否则标签会盖住圆心
       double dist = max(radius, 25.0);
 
-      // 3. 计算标签在屏幕上的坐标
-      // x = center.x + r * cos(theta)
-      // y = center.y + r * sin(theta)
       double dx = dist * cos(currentAngle);
       double dy = dist * sin(currentAngle);
 
       Offset labelPos = center + Offset(dx, dy);
 
-      // 4. 居中绘制：让文字中心对准计算出的点
       tp.paint(canvas, labelPos - Offset(tp.width / 2, tp.height / 2));
+    }
+
+    // ================= 3. 绘制用户输入点 ==================
+    if (userPoint != null) {
+      final x = userPoint!.real * scale + scale;
+      final y = -userPoint!.imaginary * scale + scale;
+
+      final paint = Paint()
+        ..color = Colors.red
+        ..style = PaintingStyle.fill;
+      canvas.drawCircle(Offset(x, y), 6, paint); // 标记输入点
     }
 
     // 3. Smith圆心标注

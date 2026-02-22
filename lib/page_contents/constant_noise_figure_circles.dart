@@ -10,33 +10,23 @@ import '../functional_components/fixed_input.dart';
 import '../smith_chart_db_module/smith_gain_circle_painter.dart';
 
 enum SourceLoadInputMode {
-  gamma, // input Γs, ΓL
-  impedance, // input Zs, ZL
+  gamma,
+  impedance,
 }
 
-// Example data model
 class NoiseCircleExample {
   final String title;
   final String subtitle;
-
   final SourceLoadInputMode mode;
   final ComplexInputFormat preferredFormat;
   final double? z0;
   final double fminDb;
   final double rnOhm;
-
-  // Noise params
   final Complex gammaOpt;
-
-  // Demo Γs/ΓL (book may not give; we provide for NF@Γs)
   final Complex gammaS;
   final Complex gammaL;
-
-  // Demo Zs/ZL (for impedance mode)
   final Complex zs;
   final Complex zl;
-
-  // Target F list (dB)
   final List<double> fTargetsDb;
 
   const NoiseCircleExample({
@@ -111,12 +101,9 @@ class _ConstantNoiseFigureCirclesPageState
   List<StepPanel> _stepPanels = [];
   List<List<String>> _summaryTableData = [];
   List<GainCircleData> noiseFigureCirclePainterData = [];
-
-  // NF for specific Γs
   double? _nfLinForGammaS;
   double? _nfDbForGammaS;
 
-  // warnings/errors
   final List<String> _warnings = [];
   void _warn(String msg) => _warnings.add(msg);
 
@@ -331,9 +318,6 @@ class _ConstantNoiseFigureCirclesPageState
     return ComplexParser.parseUniversal(_joinInput(c1, c2), _currentFormat);
   }
 
-  // -----------------------------
-  // Γ <-> Z conversions (SAFE: returns null when invalid)
-  // -----------------------------
   Complex? _zToGammaSafe(Complex z, double z0) {
     if (!_isFiniteComplex(z)) return null;
     if (z0 <= 0) return null;
@@ -655,7 +639,6 @@ class _ConstantNoiseFigureCirclesPageState
       }
     }
 
-    // --- Panel 0: Basic Formulas & Parameters ---
     _stepPanels.add(
       StepPanel(
         title: 'Basic Formulas & Parameters',
@@ -708,7 +691,6 @@ class _ConstantNoiseFigureCirclesPageState
       ),
     );
 
-    // --- Panel 1: Specific Γs -> F result (Detailed Substitution) ---
     final String strGammaS =
     ComplexFormatter.latex(Gamma_s, _currentFormat, precision: 3);
     final String strGammaOpt =
@@ -763,7 +745,6 @@ class _ConstantNoiseFigureCirclesPageState
       ),
     );
 
-    // --- Noise Figure circles (guarded) ---
     if (!_isFiniteNum(rn) || rn.abs() < _eps) {
       _warn('Noise circles skipped because rn is invalid.');
     } else {
@@ -877,14 +858,12 @@ class _ConstantNoiseFigureCirclesPageState
     }
   }
 
-  // Validators (page-local)
   String? _requiredNum(String? v) {
     if (v == null || v.trim().isEmpty) return 'Required';
     if (double.tryParse(v.trim()) == null) return 'Num Only';
     return null;
   }
 
-  // ✅ CHANGED: allow blank (meaning default 50)
   String? _z0Validator(String? v) {
     if (v == null || v.trim().isEmpty) return null;
 
@@ -916,7 +895,6 @@ class _ConstantNoiseFigureCirclesPageState
     return null;
   }
 
-  // Γ row validator: |Γ|<1
   String? _gammaRowValidator(TextEditingController c1, TextEditingController c2) {
     final a = c1.text.trim();
     final b = c2.text.trim();
@@ -936,7 +914,6 @@ class _ConstantNoiseFigureCirclesPageState
     return null;
   }
 
-  // Z row validator: avoid Z≈-Z0
   String? _zRowValidator(TextEditingController c1, TextEditingController c2) {
     final a = c1.text.trim();
     final b = c2.text.trim();
@@ -1343,7 +1320,6 @@ class _ConstantNoiseFigureCirclesPageState
             );
 
             if (!isNarrow) {
-              // Wide: full text labels
               final prevBtn = ElevatedButton.icon(
                 onPressed: _prevExample,
                 icon: const Icon(Icons.chevron_left),
@@ -1379,7 +1355,6 @@ class _ConstantNoiseFigureCirclesPageState
               );
             }
 
-            // Narrow: keep buttons ALWAYS in one row (short labels)
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -1618,7 +1593,6 @@ class _ConstantNoiseFigureCirclesPageState
                       validator: _z0Validator,
                       onChangedHook: () {
                         _syncOtherSideFromCurrentSide();
-                        // 触发防抖
                       },
                       onSubmit: _onCalculatePressed,
                       action: TextInputAction.next,
@@ -1675,7 +1649,6 @@ class _ConstantNoiseFigureCirclesPageState
               const SizedBox(height: 18),
 
               if (_hasCalculated) ...[
-                // circles visualization
                 if (noiseFigureCirclePainterData.isNotEmpty)
                   Container(
                     width: double.infinity,
@@ -1769,7 +1742,6 @@ class _ConstantNoiseFigureCirclesPageState
   }
 }
 
-// Step panel data structure
 class StepPanel {
   final String title;
   final List<Widget> content;
