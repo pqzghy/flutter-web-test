@@ -21,6 +21,10 @@ class GainCircleExamplePreset {
   final String s11Mag, s11Ang;
   final String s21Mag, s21Ang;
   final String s22Mag, s22Ang;
+  final String gammaSReal, gammaSImag;
+  final String gammaLReal, gammaLImag;
+  final String zsReal, zsImag;
+  final String zlReal, zlImag;
 
   const GainCircleExamplePreset({
     required this.name,
@@ -32,6 +36,14 @@ class GainCircleExamplePreset {
     required this.s21Ang,
     required this.s22Mag,
     required this.s22Ang,
+    required this.gammaSReal,
+    required this.gammaSImag,
+    required this.gammaLReal,
+    required this.gammaLImag,
+    required this.zsReal,
+    required this.zsImag,
+    required this.zlReal,
+    required this.zlImag,
   });
 }
 
@@ -98,6 +110,14 @@ class _GainCirclePageState extends State<GainCirclePage> {
       s21Ang: '0',
       s22Mag: '0.8',
       s22Ang: '-80',
+      gammaSReal: '0.8',
+      gammaSImag: '80',
+      gammaLReal: '0.8',
+      gammaLImag: '80',
+      zsReal: '',
+      zsImag: '',
+      zlReal: '',
+      zlImag: '',
     ),
     const GainCircleExamplePreset(
       name: 'Example 4-3 Variant (phase changed)',
@@ -109,6 +129,14 @@ class _GainCirclePageState extends State<GainCirclePage> {
       s21Ang: '10',
       s22Mag: '0.8',
       s22Ang: '-40',
+      gammaSReal: '0.8',
+      gammaSImag: '80',
+      gammaLReal: '0.8',
+      gammaLImag: '80',
+      zsReal: '',
+      zsImag: '',
+      zlReal: '',
+      zlImag: '',
     ),
     const GainCircleExamplePreset(
       name: 'Example 4-7 (3 GHz, Unilateral, G = 15 dB)',
@@ -120,6 +148,14 @@ class _GainCirclePageState extends State<GainCirclePage> {
       s21Ang: '180',
       s22Mag: '0.51',
       s22Ang: '-20',
+      gammaSReal: '',
+      gammaSImag: '',
+      gammaLReal: '',
+      gammaLImag: '',
+      zsReal: '',
+      zsImag: '',
+      zlReal: '',
+      zlImag: '',
     ),
     const GainCircleExamplePreset(
       name: 'Example 4-9 (1 GHz, Unilateral, G = 16 dB)',
@@ -131,6 +167,14 @@ class _GainCirclePageState extends State<GainCirclePage> {
       s21Ang: '180',
       s22Mag: '0.51',
       s22Ang: '-20',
+      gammaSReal: '',
+      gammaSImag: '',
+      gammaLReal: '',
+      gammaLImag: '',
+      zsReal: '',
+      zsImag: '',
+      zlReal: '',
+      zlImag: '',
     ),
     const GainCircleExamplePreset(
       name: 'Normal Passive Ports (|S11|,|S22| small)',
@@ -142,6 +186,14 @@ class _GainCirclePageState extends State<GainCirclePage> {
       s21Ang: '70',
       s22Mag: '0.25',
       s22Ang: '-20',
+      gammaSReal: '',
+      gammaSImag: '',
+      gammaLReal: '',
+      gammaLImag: '',
+      zsReal: '',
+      zsImag: '',
+      zlReal: '',
+      zlImag: '',
     ),
     const GainCircleExamplePreset(
       name: 'Edge Case: |S11| ~ 0.999 (near singular)',
@@ -153,6 +205,14 @@ class _GainCirclePageState extends State<GainCirclePage> {
       s21Ang: '0',
       s22Mag: '0.8',
       s22Ang: '-80',
+      gammaSReal: '',
+      gammaSImag: '',
+      gammaLReal: '',
+      gammaLImag: '',
+      zsReal: '',
+      zsImag: '',
+      zlReal: '',
+      zlImag: '',
     ),
     const GainCircleExamplePreset(
       name: 'Edge Case: |S22| ~ 0.999 (near singular)',
@@ -164,6 +224,14 @@ class _GainCirclePageState extends State<GainCirclePage> {
       s21Ang: '0',
       s22Mag: '0.999',
       s22Ang: '-80',
+      gammaSReal: '',
+      gammaSImag: '',
+      gammaLReal: '',
+      gammaLImag: '',
+      zsReal: '',
+      zsImag: '',
+      zlReal: '',
+      zlImag: '',
     ),
     const GainCircleExamplePreset(
       name: 'Error Test: Input Unstable (|S11| >= 1)',
@@ -175,6 +243,14 @@ class _GainCirclePageState extends State<GainCirclePage> {
       s21Ang: '0',
       s22Mag: '0.8',
       s22Ang: '-80',
+      gammaSReal: '',
+      gammaSImag: '',
+      gammaLReal: '',
+      gammaLImag: '',
+      zsReal: '',
+      zsImag: '',
+      zlReal: '',
+      zlImag: '',
     ),
     const GainCircleExamplePreset(
       name: 'Error Test: Output Unstable (|S22| >= 1)',
@@ -186,6 +262,14 @@ class _GainCirclePageState extends State<GainCirclePage> {
       s21Ang: '0',
       s22Mag: '1.05',
       s22Ang: '-10',
+      gammaSReal: '',
+      gammaSImag: '',
+      gammaLReal: '',
+      gammaLImag: '',
+      zsReal: '',
+      zsImag: '',
+      zlReal: '',
+      zlImag: '',
     ),
     const GainCircleExamplePreset(
       name: 'Error Test: Zero Forward Gain (|S21| ≈ 0)',
@@ -197,6 +281,14 @@ class _GainCirclePageState extends State<GainCirclePage> {
       s21Ang: '0',
       s22Mag: '0.8',
       s22Ang: '-80',
+      gammaSReal: '',
+      gammaSImag: '',
+      gammaLReal: '',
+      gammaLImag: '',
+      zsReal: '',
+      zsImag: '',
+      zlReal: '',
+      zlImag: '',
     ),
     const GainCircleExamplePreset(
       name: 'Table Test: Gain targets too high',
@@ -208,6 +300,14 @@ class _GainCirclePageState extends State<GainCirclePage> {
       s21Ang: '0',
       s22Mag: '0.8',
       s22Ang: '-80',
+      gammaSReal: '',
+      gammaSImag: '',
+      gammaLReal: '',
+      gammaLImag: '',
+      zsReal: '',
+      zsImag: '',
+      zlReal: '',
+      zlImag: '',
     ),
   ];
 
@@ -325,7 +425,7 @@ class _GainCirclePageState extends State<GainCirclePage> {
     _currentFormat = ComplexInputFormat.polarDegree;
     _slMode = SourceLoadInputMode.gamma;
 
-    z0C.text = ex.z0;
+    z0C.text = ex.z0?.isEmpty ?? true ? '50' : ex.z0!;
     gainDbListC.text = ex.gainDbList;
 
     s11C1.text = ex.s11Mag;
@@ -340,12 +440,17 @@ class _GainCirclePageState extends State<GainCirclePage> {
     s12C1.text = '0';
     s12C2.text = '0';
 
-    // Reset User Source / Load points for new example
-    gammaSC1.text = '0'; gammaSC2.text = '0';
-    gammaLC1.text = '0'; gammaLC2.text = '0';
-    final defaultZ0 = _z0ForConversion();
-    zsC1.text = defaultZ0.toString(); zsC2.text = '0';
-    zlC1.text = defaultZ0.toString(); zlC2.text = '0';
+    gammaSC1.text = ex.gammaSReal?.isEmpty ?? true ? '0' : ex.gammaSReal!;
+    gammaSC2.text = ex.gammaSImag?.isEmpty ?? true ? '0' : ex.gammaSImag!;
+
+    gammaLC1.text = ex.gammaLReal?.isEmpty ?? true ? '0' : ex.gammaLReal!;
+    gammaLC2.text = ex.gammaLImag?.isEmpty ?? true ? '0' : ex.gammaLImag!;
+
+    zsC1.text = ex.zsReal?.isEmpty ?? true ? '50' : ex.zsReal!;
+    zsC2.text = ex.zsImag?.isEmpty ?? true ? '0' : ex.zsImag!;
+
+    zlC1.text = ex.zlReal?.isEmpty ?? true ? '50' : ex.zlReal!;
+    zlC2.text = ex.zlImag?.isEmpty ?? true ? '0' : ex.zlImag!;
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _syncSourceLoadByMode();
@@ -1625,7 +1730,7 @@ class _OutputGainSectionState extends State<OutputGainSection> {
       double r_sq_inner = 1 - g_l;
       double r = (sqrt(max(0, r_sq_inner)) * (1 - s22Abs2)) / denom;
 
-      circles.add(GainCircleData(center: d, radius: r, label: '${_texNum(G_db)}dB', color: Colors.redAccent));
+      circles.add(GainCircleData(center: d, radius: r, label: '${_texNum(G_db)}dB', color: Colors.blueAccent));
       tableData.add([
         _texNum(G_db),
         _texNum(g_l),
@@ -1998,7 +2103,7 @@ class DesignVerificationSection extends StatelessWidget {
           r'\textbf{5.\;Design\;Verification\ (Realized\;Gain)}',
           textStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.black),
         ),
-        initiallyExpanded: true,
+        initiallyExpanded: false,
         backgroundColor: Colors.white,
         collapsedBackgroundColor: Colors.grey[50],
         children: [
